@@ -15,7 +15,18 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 const CATEGORIES = ["Vêtements", "Chaussures", "Sacs & Accessoires", "Maison & Déco", "High-tech", "Autres"];
-const THUMB_COLORS = { "Vêtements": "#205C4B", "Chaussures": "#B5533C", "Sacs & Accessoires": "#8C6A3F", "Maison & Déco": "#4A6C6F", "High-tech": "#3D4A6B", "Autres": "#6B4B5C" };
+const THUMB_COLORS = { "Vêtements": "#2F6FED", "Chaussures": "#1B3B7A", "Sacs & Accessoires": "#3D7EFF", "Maison & Déco": "#123166", "High-tech": "#0EA5C4", "Autres": "#274A8C" };
+
+// ---------------- THEME ----------------
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("boulka-theme", theme);
+}
+$("theme-toggle").addEventListener("click", () => {
+  const current = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  applyTheme(current);
+});
 
 let currentUser = null;
 let allProducts = [];
@@ -140,6 +151,8 @@ function listenProducts() {
     renderCategoryChips();
     renderGrid();
     renderProfileListings();
+    const liveCount = $("live-count");
+    if (liveCount) liveCount.textContent = allProducts.length;
   }, (err) => {
     console.error(err);
     showToast("Erreur de chargement — vérifie ta config Firebase");
