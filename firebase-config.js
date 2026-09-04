@@ -8,10 +8,10 @@
 // ============================================================
 
 export const firebaseConfig = {
-  apiKey: "COLLE_TA_CLE_ICI",
-  authDomain: "TON-PROJET.firebaseapp.com",
-  projectId: "TON-PROJET",
-  storageBucket: "TON-PROJET.appspot.com",
-  messagingSenderId: "000000000000",
-  appId: "1:000000000000:web:xxxxxxxxxxxxxxxx"
+  apiKey: "AIzaSyBsaeh1OHkhO3VGFrJlZWE0tX1X4IgtelM",
+  authDomain: "boulka-bad4c.firebaseapp.com",
+  projectId: "boulka-bad4c",
+  storageBucket: "boulka-bad4c.firebasestorage.app",
+  messagingSenderId: "726705220290",
+  appId: "1:726705220290:web:1652197444da95d4ece95b"
 };
