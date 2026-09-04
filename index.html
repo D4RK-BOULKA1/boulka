@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Friperie — Vends et achète entre particuliers</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="loading-screen">
+  <div class="brand">Friperie</div>
+  <div class="spinner"></div>
+</div>
+
+<!-- ============ AUTH VIEW ============ -->
+<div class="view" id="view-auth">
+  <div class="auth-card">
+    <div class="brand">Friperie</div>
+    <p class="auth-tagline">Vends ce que tu ne portes plus, trouve ta prochaine pièce</p>
+
+    <div class="auth-error" id="auth-error"></div>
+
+    <button class="btn-google" id="btn-google">
+      <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.5 0 10.4-1.9 14.3-5.1l-6.6-5.4C29.7 35.4 27 36.3 24 36.3c-5.2 0-9.6-3.3-11.2-7.9l-6.6 5.1C9.6 39.6 16.3 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4 5.5l6.6 5.4C41.6 35.6 44 30.2 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
+      Continuer avec Google
+    </button>
+
+    <div class="auth-divider">ou</div>
+
+    <form id="auth-form">
+      <div class="field" id="field-name" style="display:none">
+        <label>Nom</label>
+        <input type="text" id="auth-name" autocomplete="name">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="auth-email" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Mot de passe</label>
+        <input type="password" id="auth-password" required autocomplete="current-password" minlength="6">
+      </div>
+      <button type="submit" class="btn-primary" id="auth-submit">Se connecter</button>
+    </form>
+
+    <div class="auth-switch">
+      <span id="auth-switch-text">Pas encore de compte ?</span>
+      <button id="auth-switch-btn">Créer un compte</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP VIEW ============ -->
+<div class="view" id="view-app">
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="brand">Friperie</div>
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="search-input" placeholder="Rechercher un article...">
+      </div>
+      <div class="avatar js-user-avatar" onclick="document.querySelector('.bottom-nav [data-tab=profile]').click()"></div>
+    </div>
+    <div class="category-row" id="category-row"></div>
+  </div>
+
+  <div id="tab-home">
+    <div class="content">
+      <div class="content-header">
+        <h2>Dernières annonces</h2>
+        <span class="result-count" id="result-count"></span>
+      </div>
+      <div class="grid" id="product-grid"></div>
+      <div class="empty-state" id="empty-state" style="display:none">
+        <h3>Aucun article trouvé</h3>
+        <p>Essaie une autre recherche ou catégorie</p>
+        <button class="btn-primary" style="width:auto;padding:11px 22px" id="btn-open-sell-2">Publier une annonce</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-profile" style="display:none">
+    <div class="profile-header">
+      <div class="avatar js-user-avatar" style="width:56px;height:56px;font-size:20px"></div>
+      <div>
+        <h2 id="profile-name"></h2>
+        <div class="seller-sub" id="profile-email"></div>
+      </div>
+    </div>
+    <div class="profile-actions"><button class="btn-logout" id="btn-logout">Se déconnecter</button></div>
+    <div class="content">
+      <div class="content-header"><h2>Mes annonces</h2></div>
+      <div class="result-count" id="profile-count" style="margin-bottom:14px"></div>
+      <div id="profile-grid"></div>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <button data-tab="home" class="active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+      Accueil
+    </button>
+    <button class="sell-btn" id="btn-open-sell">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <button data-tab="profile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>
+      Profil
+    </button>
+  </div>
+</div>
+
+<!-- ============ PRODUCT DETAIL VIEW ============ -->
+<div class="view" id="view-detail">
+  <div class="detail-header">
+    <button class="back-btn" id="btn-back-detail">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="brand" style="font-size:17px">Friperie</div>
+  </div>
+  <div class="detail-photo" id="detail-photo"></div>
+  <div class="detail-body">
+    <span class="own-badge" id="detail-owner-badge" style="display:none">C'est ton article</span>
+    <div class="detail-cat" id="detail-cat"></div>
+    <h1 class="detail-title" id="detail-title"></h1>
+    <div class="detail-price" id="detail-price"></div>
+    <p class="detail-desc" id="detail-desc"></p>
+
+    <div class="seller-row">
+      <div class="avatar" id="detail-seller-avatar"></div>
+      <div>
+        <div class="seller-name" id="detail-seller-name"></div>
+        <div class="seller-sub" id="detail-seller-sub"></div>
+      </div>
+    </div>
+
+    <div class="detail-actions" id="detail-buy-actions">
+      <button class="btn-outline" onclick="document.getElementById('offer-amount').focus()">Négocier</button>
+      <button class="btn-primary" id="btn-buy-now">Acheter</button>
+    </div>
+
+    <div class="offers-section">
+      <h3>Offres</h3>
+      <div id="offer-form-wrap" style="margin-bottom:16px">
+        <form id="offer-form" style="display:flex;gap:8px">
+          <input type="number" id="offer-amount" placeholder="Ton prix (€)" min="1" step="0.5" style="flex:1;padding:11px 12px;border:1px solid var(--line);border-radius:3px;background:var(--linen)">
+          <button type="submit" class="btn-primary" style="width:auto;padding:0 20px;margin-top:0">Envoyer</button>
+        </form>
+      </div>
+      <div id="offers-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SELL MODAL ============ -->
+<div class="modal-overlay hidden-modal" id="modal-sell">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>Publier une annonce</h2>
+      <button class="close-btn" id="btn-close-sell">&times;</button>
+    </div>
+    <form id="sell-form">
+      <div class="photo-upload" id="photo-preview-wrap"></div>
+      <div class="field">
+        <label>Titre</label>
+        <input type="text" id="sell-title" required maxlength="60" placeholder="Ex : Blouson en cuir Zara">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Prix (€)</label>
+          <input type="number" id="sell-price" required min="1" step="0.5" placeholder="25">
+        </div>
+        <div class="field">
+          <label>Catégorie</label>
+          <select id="sell-category"></select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="sell-description" maxlength="600" placeholder="État, taille, matière, défauts éventuels..."></textarea>
+      </div>
+      <button type="submit" class="btn-primary" id="sell-submit">Publier l'annonce</button>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<style>.hidden-modal{display:none !important}</style>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
