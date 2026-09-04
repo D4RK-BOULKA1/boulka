@@ -17,17 +17,6 @@ const db = getFirestore(app);
 const CATEGORIES = ["Vêtements", "Chaussures", "Sacs & Accessoires", "Maison & Déco", "High-tech", "Autres"];
 const THUMB_COLORS = { "Vêtements": "#2F6FED", "Chaussures": "#1B3B7A", "Sacs & Accessoires": "#3D7EFF", "Maison & Déco": "#123166", "High-tech": "#0EA5C4", "Autres": "#274A8C" };
 
-// ---------------- THEME ----------------
-
-function applyTheme(theme) {
-  document.documentElement.setAttribute("data-theme", theme);
-  localStorage.setItem("boulka-theme", theme);
-}
-$("theme-toggle").addEventListener("click", () => {
-  const current = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
-  applyTheme(current);
-});
-
 let currentUser = null;
 let allProducts = [];
 let activeCategory = "Tout";
@@ -40,6 +29,17 @@ let authMode = "signin";
 const $ = (id) => document.getElementById(id);
 const escapeHtml = (s) => (s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const initials = (name) => (name || "?").trim().split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase();
+
+// ---------------- THEME ----------------
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("boulka-theme", theme);
+}
+$("theme-toggle").addEventListener("click", () => {
+  const current = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  applyTheme(current);
+});
 
 function showToast(msg) {
   const t = $("toast");
