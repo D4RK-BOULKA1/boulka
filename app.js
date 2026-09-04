@@ -1,39 +1,45 @@
 import { firebaseConfig } from "./firebase-config.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup,
+  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
   onAuthStateChanged, signOut, updateProfile
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore, collection, collectionGroup, addDoc, doc, getDoc, setDoc,
-  query, where, orderBy, onSnapshot, serverTimestamp, updateDoc
+  getFirestore, collection, addDoc, doc, getDocs, getDoc,
+  query, orderBy, onSnapshot, serverTimestamp, updateDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const CATEGORIES = ["High-tech", "Mode", "Maison", "Sport", "Loisirs", "Autres"];
-const THUMB_COLORS = { "High-tech": "#2A55FF", "Mode": "#B5533C", "Maison": "#4A6C6F", "Sport": "#1B3AC4", "Loisirs": "#6B4B5C", "Autres": "#5A6B85" };
-const SHIPPING_LABEL = { both: "Main propre ou envoi", hand: "Main propre uniquement", ship: "Envoi uniquement" };
+const CATEGORIES = ["Vêtements", "Chaussures", "Sacs & Accessoires", "Maison & Déco", "High-tech", "Autres"];
+const THUMB_COLORS = { "Vêtements": "#2F6FED", "Chaussures": "#1B3B7A", "Sacs & Accessoires": "#3D7EFF", "Maison & Déco": "#123166", "High-tech": "#0EA5C4", "Autres": "#274A8C" };
 
 let currentUser = null;
-let currentUserProfile = null;
 let allProducts = [];
 let activeCategory = "Tout";
 let searchTerm = "";
 let currentProductId = null;
 let unsubProducts = null;
-let unsubOffers = null;
-let unsubNotif = null;
 let pendingPhoto = null;
 let authMode = "signin";
-let theme = "light";
 
 const $ = (id) => document.getElementById(id);
 const escapeHtml = (s) => (s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const initials = (name) => (name || "?").trim().split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase();
+
+// ---------------- THEME ----------------
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("boulka-theme", theme);
+}
+$("theme-toggle").addEventListener("click", () => {
+  const current = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  applyTheme(current);
+});
 
 function showToast(msg) {
   const t = $("toast");
@@ -41,33 +47,39 @@ function showToast(msg) {
   t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 2200);
 }
+
 function showView(id) {
-  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-  $(id).classList.add("active");
+  const target = $(id);
+  if (target.classList.contains("active")) return;
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active", "view-enter"));
+  target.classList.add("active", "view-enter");
+  void target.offsetWidth; // force reflow so the entrance animation replays
+  requestAnimationFrame(() => target.classList.remove("view-enter"));
 }
-function showAuthError(msg) { const el = $("auth-error"); el.textContent = msg; el.classList.add("show"); }
+
+function showAuthError(msg) {
+  const el = $("auth-error");
+  el.textContent = msg;
+  el.classList.add("show");
+}
 function clearAuthError() { $("auth-error").classList.remove("show"); }
-
-// ---------------- THEME ----------------
-
-$("btn-theme-toggle").addEventListener("click", () => {
-  theme = theme === "light" ? "dark" : "light";
-  document.documentElement.setAttribute("data-theme", theme);
-  $("theme-icon-path").setAttribute("d", theme === "light"
-    ? "M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"
-    : "M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z");
-});
 
 // ---------------- AUTH ----------------
 
 $("btn-google").addEventListener("click", async () => {
   clearAuthError();
+  const btn = $("btn-google");
+  btn.disabled = true;
   try {
-    const cred = await signInWithPopup(auth, new GoogleAuthProvider());
-    await ensureUserProfile(cred.user, { accountType: "particulier" });
+    await signInWithRedirect(auth, new GoogleAuthProvider());
   } catch (e) {
     showAuthError(friendlyAuthError(e.code));
+    btn.disabled = false;
   }
+});
+
+getRedirectResult(auth).catch((e) => {
+  if (e && e.code) showAuthError(friendlyAuthError(e.code));
 });
 
 $("auth-form").addEventListener("submit", async (e) => {
@@ -76,21 +88,12 @@ $("auth-form").addEventListener("submit", async (e) => {
   const email = $("auth-email").value.trim();
   const password = $("auth-password").value;
   const name = $("auth-name").value.trim();
-  const accountType = $("auth-account-type").value;
-  const companyName = $("auth-company-name").value.trim();
-  const siret = $("auth-siret").value.trim();
   const submitBtn = $("auth-submit");
   submitBtn.disabled = true;
   try {
     if (authMode === "signup") {
-      if (accountType === "professionnel" && (!companyName || !siret)) {
-        showAuthError("Nom d'entreprise et SIRET requis pour un compte professionnel.");
-        submitBtn.disabled = false;
-        return;
-      }
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       if (name) await updateProfile(cred.user, { displayName: name });
-      await ensureUserProfile(cred.user, { accountType, companyName: accountType === "professionnel" ? companyName : null, siret: accountType === "professionnel" ? siret : null });
     } else {
       await signInWithEmailAndPassword(auth, email, password);
     }
@@ -99,21 +102,6 @@ $("auth-form").addEventListener("submit", async (e) => {
   }
   submitBtn.disabled = false;
 });
-
-async function ensureUserProfile(user, defaults) {
-  const ref = doc(db, "users", user.uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      displayName: user.displayName || user.email,
-      email: user.email,
-      accountType: defaults.accountType || "particulier",
-      companyName: defaults.companyName || null,
-      siret: defaults.siret || null,
-      createdAt: serverTimestamp()
-    });
-  }
-}
 
 function friendlyAuthError(code) {
   const map = {
@@ -132,44 +120,38 @@ function friendlyAuthError(code) {
 $("auth-switch-btn").addEventListener("click", () => {
   authMode = authMode === "signin" ? "signup" : "signin";
   clearAuthError();
-  const isSignup = authMode === "signup";
-  $("field-name").style.display = isSignup ? "block" : "none";
-  $("field-account-type").style.display = isSignup ? "block" : "none";
-  $("field-pro").style.display = isSignup && $("auth-account-type").value === "professionnel" ? "flex" : "none";
-  $("auth-submit").textContent = isSignup ? "Créer mon compte" : "Se connecter";
-  $("auth-switch-text").textContent = isSignup ? "Déjà un compte ?" : "Pas encore de compte ?";
-  $("auth-switch-btn").textContent = isSignup ? "Se connecter" : "Créer un compte";
-});
-
-$("auth-account-type").addEventListener("change", (e) => {
-  $("field-pro").style.display = e.target.value === "professionnel" ? "flex" : "none";
+  $("field-name").style.display = authMode === "signup" ? "block" : "none";
+  $("auth-submit").textContent = authMode === "signup" ? "Créer mon compte" : "Se connecter";
+  $("auth-switch-text").textContent = authMode === "signup" ? "Déjà un compte ?" : "Pas encore de compte ?";
+  $("auth-switch-btn").textContent = authMode === "signup" ? "Se connecter" : "Créer un compte";
 });
 
 $("btn-logout").addEventListener("click", () => signOut(auth));
 
-onAuthStateChanged(auth, async (user) => {
+onAuthStateChanged(auth, (user) => {
   currentUser = user;
-  $("loading-screen").style.display = "none";
+  const loader = $("loading-screen");
+  loader.classList.add("fade-out");
+  setTimeout(() => { loader.style.display = "none"; }, 350);
   if (user) {
-    await ensureUserProfile(user, {});
-    const snap = await getDoc(doc(db, "users", user.uid));
-    currentUserProfile = snap.exists() ? snap.data() : null;
     renderAvatar(user);
     showView("view-app");
     switchTab("home");
     listenProducts();
-    listenNotifications();
   } else {
     if (unsubProducts) unsubProducts();
-    if (unsubNotif) unsubNotif();
     showView("view-auth");
   }
 });
 
 function renderAvatar(user) {
-  document.querySelectorAll(".js-user-avatar").forEach(n => {
-    if (user.photoURL) n.innerHTML = `<img src="${user.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
-    else n.textContent = initials(user.displayName || user.email);
+  const nodes = document.querySelectorAll(".js-user-avatar");
+  nodes.forEach(n => {
+    if (user.photoURL) {
+      n.innerHTML = `<img src="${user.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
+    } else {
+      n.textContent = initials(user.displayName || user.email);
+    }
   });
 }
 
@@ -182,7 +164,12 @@ function listenProducts() {
     renderCategoryChips();
     renderGrid();
     renderProfileListings();
-  }, (err) => { console.error(err); showToast("Erreur de chargement — vérifie ta config Firebase"); });
+    const liveCount = $("live-count");
+    if (liveCount) liveCount.textContent = allProducts.length;
+  }, (err) => {
+    console.error(err);
+    showToast("Erreur de chargement — vérifie ta config Firebase");
+  });
 }
 
 function renderCategoryChips() {
@@ -190,65 +177,75 @@ function renderCategoryChips() {
   row.innerHTML = "";
   ["Tout", ...CATEGORIES].forEach(cat => {
     const btn = document.createElement("button");
-    btn.className = "pill" + (cat === activeCategory ? " active" : "");
+    btn.className = "chip" + (cat === activeCategory ? " active" : "");
     btn.textContent = cat;
     btn.addEventListener("click", () => { activeCategory = cat; renderCategoryChips(); renderGrid(); });
     row.appendChild(btn);
   });
 }
-document.querySelectorAll(".tile[data-cat]").forEach(t => t.addEventListener("click", () => {
-  activeCategory = t.dataset.cat; renderCategoryChips(); renderGrid();
-  window.scrollTo({ top: document.getElementById("product-grid").offsetTop - 100, behavior: "smooth" });
-}));
 
-$("search-input").addEventListener("input", (e) => { searchTerm = e.target.value.toLowerCase(); renderGrid(); });
-$("btn-nav-search").addEventListener("click", () => { switchTab("home"); $("search-input").focus(); });
+$("search-input").addEventListener("input", (e) => {
+  searchTerm = e.target.value.toLowerCase();
+  renderGrid();
+});
 
 function renderGrid() {
   let list = allProducts;
   if (activeCategory !== "Tout") list = list.filter(p => p.category === activeCategory);
   if (searchTerm) list = list.filter(p => (p.title + " " + p.description).toLowerCase().includes(searchTerm));
+
   $("result-count").textContent = list.length + (list.length > 1 ? " articles" : " article");
   const grid = $("product-grid");
   const empty = $("empty-state");
-  if (list.length === 0) { grid.innerHTML = ""; empty.style.display = "block"; return; }
+
+  if (list.length === 0) {
+    grid.innerHTML = "";
+    empty.style.display = "block";
+    return;
+  }
   empty.style.display = "none";
   grid.innerHTML = list.map(productCardHtml).join("");
-  grid.querySelectorAll(".product-card").forEach(card => card.addEventListener("click", () => openProduct(card.dataset.id)));
+  grid.querySelectorAll(".product-card").forEach(card => {
+    card.addEventListener("click", () => openProduct(card.dataset.id));
+  });
 }
 
 function productCardHtml(p) {
-  const color = THUMB_COLORS[p.category] || "#2A55FF";
-  const thumb = p.photo ? `<img src="${p.photo}" alt="">` : escapeHtml(p.title);
+  const color = THUMB_COLORS[p.category] || "#205C4B";
+  const thumb = p.photo
+    ? `<img src="${p.photo}" alt="">`
+    : escapeHtml(p.title);
   return `
     <div class="product-card" data-id="${p.id}">
       <div class="product-thumb" style="background:${color}">${thumb}</div>
       <div class="product-card-body">
         <div class="product-title">${escapeHtml(p.title)}</div>
-        <div class="product-meta">${escapeHtml(p.category)}${p.condition ? " · " + escapeHtml(p.condition) : ""}</div>
+        <div class="product-meta">${escapeHtml(p.category)}</div>
         <div class="product-price">${Number(p.price).toFixed(2)} €</div>
       </div>
     </div>`;
 }
 
-// ---------------- SELL ----------------
+// ---------------- SELL MODAL ----------------
 
-$("btn-nav-sell").addEventListener("click", openSellForm);
-$("btn-open-sell-hero").addEventListener("click", openSellForm);
-$("btn-open-sell-2").addEventListener("click", openSellForm);
-$("btn-back-sell").addEventListener("click", () => { showView("view-app"); switchTab("home"); });
+$("btn-open-sell").addEventListener("click", openSellModal);
+$("btn-open-sell-2").addEventListener("click", openSellModal);
+$("btn-close-sell").addEventListener("click", closeSellModal);
 
-function openSellForm() {
+function openSellModal() {
   $("sell-form").reset();
   pendingPhoto = null;
   $("photo-preview-wrap").innerHTML = photoUploadHtml();
   bindPhotoInput();
   $("sell-category").innerHTML = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
-  showView("view-sell");
+  $("modal-sell").classList.remove("hidden-modal");
 }
+function closeSellModal() { $("modal-sell").classList.add("hidden-modal"); }
 
 function photoUploadHtml(dataUrl) {
-  if (dataUrl) return `<img src="${dataUrl}"><input type="file" id="photo-input" accept="image/*">`;
+  if (dataUrl) {
+    return `<img src="${dataUrl}"><input type="file" id="photo-input" accept="image/*">`;
+  }
   return `
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M21 16l-4.5-4.5a2 2 0 0 0-2.8 0L5 21"/></svg>
     <span>Ajouter une photo</span>
@@ -289,8 +286,6 @@ $("sell-form").addEventListener("submit", async (e) => {
   const title = $("sell-title").value.trim();
   const price = parseFloat($("sell-price").value);
   const category = $("sell-category").value;
-  const condition = $("sell-condition").value;
-  const shipping = $("sell-shipping").value;
   const description = $("sell-description").value.trim();
   if (!title || !price || price <= 0) { showToast("Titre et prix requis"); return; }
 
@@ -299,17 +294,16 @@ $("sell-form").addEventListener("submit", async (e) => {
   btn.textContent = "Publication...";
   try {
     await addDoc(collection(db, "products"), {
-      title, price, category, condition, shipping, description,
+      title, price, category, description,
       photo: pendingPhoto || null,
       sellerId: currentUser.uid,
       sellerName: currentUser.displayName || currentUser.email,
       sellerPhoto: currentUser.photoURL || null,
-      sellerIsPro: currentUserProfile?.accountType === "professionnel",
       createdAt: serverTimestamp()
     });
-    showView("view-app");
+    closeSellModal();
     switchTab("home");
-    showToast("Annonce publiée ! Visible par tous les utilisateurs.");
+    showToast("Annonce publiée !");
   } catch (err) {
     console.error(err);
     showToast("Erreur lors de la publication");
@@ -331,24 +325,22 @@ async function openProduct(id) {
 }
 
 function renderProductDetail(p) {
-  const color = THUMB_COLORS[p.category] || "#2A55FF";
+  const color = THUMB_COLORS[p.category] || "#205C4B";
   const isOwner = currentUser && p.sellerId === currentUser.uid;
   $("detail-photo").style.background = color;
   $("detail-photo").innerHTML = p.photo ? `<img src="${p.photo}">` : escapeHtml(p.title);
   $("detail-cat").textContent = p.category;
   $("detail-title").textContent = p.title;
   $("detail-price").textContent = Number(p.price).toFixed(2) + " €";
-  $("detail-condition").textContent = p.condition || "";
-  $("detail-condition").style.display = p.condition ? "inline-block" : "none";
-  $("detail-shipping").textContent = SHIPPING_LABEL[p.shipping] || "";
-  $("detail-shipping").style.display = p.shipping ? "inline-block" : "none";
   $("detail-desc").textContent = p.description || "Pas de description.";
   $("detail-owner-badge").style.display = isOwner ? "inline-block" : "none";
+
   $("detail-seller-avatar").innerHTML = p.sellerPhoto
     ? `<img src="${p.sellerPhoto}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`
     : initials(p.sellerName);
-  $("detail-seller-name").textContent = p.sellerName + (p.sellerIsPro ? " · Pro" : "");
+  $("detail-seller-name").textContent = p.sellerName;
   $("detail-seller-sub").textContent = "Vendeur";
+
   $("detail-buy-actions").style.display = isOwner ? "none" : "flex";
   $("offer-form-wrap").style.display = isOwner ? "none" : "block";
   $("offer-amount").value = "";
@@ -363,12 +355,9 @@ $("offer-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const amount = parseFloat($("offer-amount").value);
   if (!amount || amount <= 0) return;
-  const psnap = await getDoc(doc(db, "products", currentProductId));
   await addDoc(collection(db, "products", currentProductId, "offers"), {
     buyerId: currentUser.uid,
     buyerName: currentUser.displayName || currentUser.email,
-    sellerId: psnap.data().sellerId,
-    productTitle: psnap.data().title,
     amount,
     status: "pending",
     createdAt: serverTimestamp()
@@ -383,8 +372,6 @@ $("btn-buy-now").addEventListener("click", async () => {
   await addDoc(collection(db, "products", currentProductId, "offers"), {
     buyerId: currentUser.uid,
     buyerName: currentUser.displayName || currentUser.email,
-    sellerId: p.sellerId,
-    productTitle: p.title,
     amount: p.price,
     status: "pending",
     createdAt: serverTimestamp()
@@ -392,6 +379,7 @@ $("btn-buy-now").addEventListener("click", async () => {
   showToast("Demande d'achat envoyée au vendeur");
 });
 
+let unsubOffers = null;
 function listenOffers(productId, product) {
   if (unsubOffers) unsubOffers();
   const isOwner = currentUser && product.sellerId === currentUser.uid;
@@ -401,10 +389,10 @@ function listenOffers(productId, product) {
     const wrap = $("offers-list");
     const visible = isOwner ? offers : offers.filter(o => o.buyerId === currentUser.uid);
     if (visible.length === 0) {
-      wrap.innerHTML = `<p style="font-size:13px;color:var(--mut)">${isOwner ? "Aucune offre pour l'instant." : "Fais une offre ou achète au prix affiché."}</p>`;
+      wrap.innerHTML = `<p style="font-size:13px;color:var(--ink-soft)">${isOwner ? "Aucune offre pour l'instant." : "Fais une offre ou achète au prix affiché."}</p>`;
       return;
     }
-    wrap.innerHTML = visible.map(o => offerCardHtml(o, isOwner)).join("");
+    wrap.innerHTML = visible.map(o => offerCardHtml(o, isOwner, productId)).join("");
     if (isOwner) {
       wrap.querySelectorAll("[data-accept]").forEach(b => b.addEventListener("click", () => setOfferStatus(productId, b.dataset.accept, "accepted")));
       wrap.querySelectorAll("[data-decline]").forEach(b => b.addEventListener("click", () => setOfferStatus(productId, b.dataset.decline, "declined")));
@@ -412,7 +400,7 @@ function listenOffers(productId, product) {
   });
 }
 
-function offerCardHtml(o, isOwner) {
+function offerCardHtml(o, isOwner, productId) {
   const statusLabel = { pending: "En attente", accepted: "Acceptée ✓", declined: "Refusée" }[o.status];
   return `
     <div class="offer-card">
@@ -434,26 +422,6 @@ async function setOfferStatus(productId, offerId, status) {
   showToast(status === "accepted" ? "Offre acceptée" : "Offre refusée");
 }
 
-// ---------------- NOTIFICATIONS ----------------
-
-function listenNotifications() {
-  if (unsubNotif) unsubNotif();
-  const q = query(collectionGroup(db, "offers"), where("sellerId", "==", currentUser.uid), orderBy("createdAt", "desc"));
-  unsubNotif = onSnapshot(q, (snap) => {
-    const rows = snap.docs.map(d => d.data());
-    const wrap = $("notif-list");
-    if (rows.length === 0) { wrap.innerHTML = `<p style="font-size:13px;color:var(--mut)">Aucune notification.</p>`; return; }
-    wrap.innerHTML = rows.map(o => `
-      <div class="notif-row">
-        <span>${escapeHtml(o.buyerName)} sur <strong>${escapeHtml(o.productTitle || "ton article")}</strong></span>
-        <span class="amt">${Number(o.amount).toFixed(2)} €</span>
-      </div>`).join("");
-  }, (err) => {
-    console.error(err);
-    // Firestore peut demander la création d'un index composite au premier lancement — le lien apparaît dans la console.
-  });
-}
-
 // ---------------- PROFILE ----------------
 
 function renderProfileListings() {
@@ -464,19 +432,23 @@ function renderProfileListings() {
   $("profile-count").textContent = mine.length + (mine.length > 1 ? " annonces publiées" : " annonce publiée");
   const grid = $("profile-grid");
   if (mine.length === 0) {
-    grid.innerHTML = `<p style="font-size:13px;color:var(--mut);padding:20px 0">Tu n'as pas encore publié d'annonce.</p>`;
+    grid.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);padding:20px 0">Tu n'as pas encore publié d'annonce.</p>`;
     return;
   }
   grid.innerHTML = `<div class="grid">${mine.map(productCardHtml).join("")}</div>`;
-  grid.querySelectorAll(".product-card").forEach(card => card.addEventListener("click", () => openProduct(card.dataset.id)));
+  grid.querySelectorAll(".product-card").forEach(card => {
+    card.addEventListener("click", () => openProduct(card.dataset.id));
+  });
 }
 
 // ---------------- NAV ----------------
 
 function switchTab(tab) {
   document.querySelectorAll(".bottom-nav button[data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-  ["home", "account", "notif"].forEach(t => $("tab-" + t).style.display = t === tab ? "block" : "none");
+  ["home", "profile"].forEach(t => $("tab-" + t).style.display = t === tab ? "block" : "none");
   showView("view-app");
-  if (tab === "account") renderProfileListings();
+  if (tab === "profile") renderProfileListings();
 }
-document.querySelectorAll(".bottom-nav button[data-tab]").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+document.querySelectorAll(".bottom-nav button[data-tab]").forEach(b => {
+  b.addEventListener("click", () => switchTab(b.dataset.tab));
+});
