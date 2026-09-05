@@ -730,12 +730,18 @@ async function postChatMessage(productId, product, type, text, amount) {
 }
 
 $("btn-open-chat").addEventListener("click", async () => {
-  const snap = await getDoc(doc(db, "products", currentProductId));
-  const p = { id: currentProductId, ...snap.data() };
-  const buyerId = currentUser.uid === p.sellerId ? null : currentUser.uid;
-  if (!buyerId) { showToast("C'est ton article, tu ne peux pas discuter avec toi-même"); return; }
-  const chatId = await ensureChat(currentProductId, p, buyerId);
-  openChat(chatId);
+  try {
+    const snap = await getDoc(doc(db, "products", currentProductId));
+    if (!snap.exists()) { showToast("Cette annonce n'existe plus"); return; }
+    const p = { id: currentProductId, ...snap.data() };
+    const buyerId = currentUser.uid === p.sellerId ? null : currentUser.uid;
+    if (!buyerId) { showToast("C'est ton article, tu ne peux pas discuter avec toi-même"); return; }
+    const chatId = await ensureChat(currentProductId, p, buyerId);
+    await openChat(chatId);
+  } catch (err) {
+    console.error("Erreur à l'ouverture du chat :", err);
+    showToast("Impossible d'ouvrir la conversation — vérifie tes règles Firestore (collection 'chats')");
+  }
 });
 
 async function openChat(chatId) {
@@ -793,11 +799,16 @@ $("chat-form").addEventListener("submit", async (e) => {
   const text = input.value.trim();
   if (!text || !currentChatId) return;
   input.value = "";
-  await addDoc(collection(db, "chats", currentChatId, "messages"), {
-    senderId: currentUser.uid, senderName: currentUser.displayName || currentUser.email,
-    text, type: "text", createdAt: serverTimestamp()
-  });
-  await updateDoc(doc(db, "chats", currentChatId), { lastMessage: text, lastMessageAt: serverTimestamp(), lastSenderId: currentUser.uid });
+  try {
+    await addDoc(collection(db, "chats", currentChatId, "messages"), {
+      senderId: currentUser.uid, senderName: currentUser.displayName || currentUser.email,
+      text, type: "text", createdAt: serverTimestamp()
+    });
+    await updateDoc(doc(db, "chats", currentChatId), { lastMessage: text, lastMessageAt: serverTimestamp(), lastSenderId: currentUser.uid });
+  } catch (err) {
+    console.error("Erreur envoi message :", err);
+    showToast("Message non envoyé — réessaie");
+  }
 });
 
 $("btn-back-chat").addEventListener("click", () => {
