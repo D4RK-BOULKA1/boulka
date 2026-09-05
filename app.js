@@ -183,7 +183,14 @@ function listenProducts() {
     renderCategoryChips();
     renderGrid();
     renderProfileListings();
-  }, (err) => { console.error(err); showToast("Erreur de chargement — vérifie ta config Firebase"); });
+  }, (err) => {
+    console.error(err);
+    $("product-grid").innerHTML = "";
+    $("empty-state").style.display = "block";
+    $("empty-state").querySelector("h3").textContent = "Impossible de charger les annonces";
+    $("empty-state").querySelector("p").textContent = "Vérifie ta connexion ou réessaie dans un instant.";
+    showToast("Erreur de chargement — vérifie ta config Firebase");
+  });
 }
 
 function renderCategoryChips() {
