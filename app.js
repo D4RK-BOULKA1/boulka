@@ -39,6 +39,7 @@ let unsubReviews = null;
 let unsubChatMessages = null;
 let unsubAllReviews = null;
 let pendingPhotos = []; // dataURLs, max 5
+let checkoutProduct = null;
 let authMode = "signin";
 let theme = "light";
 
@@ -611,18 +612,70 @@ $("offer-form").addEventListener("submit", async (e) => {
 
 $("btn-buy-now").addEventListener("click", async () => {
   const snap = await getDoc(doc(db, "products", currentProductId));
-  const p = snap.data();
-  await addDoc(collection(db, "products", currentProductId, "offers"), {
-    buyerId: currentUser.uid,
-    buyerName: currentUser.displayName || currentUser.email,
-    sellerId: p.sellerId,
-    productTitle: p.title,
-    amount: p.price,
-    status: "pending",
-    createdAt: serverTimestamp()
-  });
-  await postChatMessage(currentProductId, p, "offer", `Demande d'achat au prix affiché : ${formatPrice(p.price)}`, p.price);
-  showToast("Demande d'achat envoyée au vendeur");
+  const p = { id: currentProductId, ...snap.data() };
+  if (p.sellerId === currentUser.uid) { showToast("C'est ton article"); return; }
+  openCheckout(p);
+});
+
+function openCheckout(p) {
+  checkoutProduct = p;
+  const color = THUMB_COLORS[p.category] || "#2A55FF";
+  const photos = p.photos && p.photos.length ? p.photos : (p.photo ? [p.photo] : []);
+  $("checkout-product-thumb").style.background = color;
+  $("checkout-product-thumb").innerHTML = photos[0] ? `<img src="${photos[0]}">` : "";
+  $("checkout-product-title").textContent = p.title;
+  $("checkout-product-price").textContent = formatPrice(p.price);
+  $("checkout-form").reset();
+  showView("view-checkout");
+}
+
+$("btn-back-checkout").addEventListener("click", () => {
+  showView("view-detail");
+});
+
+$("checkout-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!checkoutProduct) return;
+  const firstName = $("checkout-firstname").value.trim();
+  const lastName = $("checkout-lastname").value.trim();
+  const email = $("checkout-email").value.trim();
+  const whatsapp = $("checkout-whatsapp").value.trim();
+  if (!firstName || !lastName || !email || !whatsapp) { showToast("Merci de remplir tous les champs"); return; }
+
+  const btn = $("checkout-submit");
+  btn.disabled = true;
+  btn.textContent = "Envoi en cours...";
+  try {
+    const p = checkoutProduct;
+    await addDoc(collection(db, "products", p.id, "offers"), {
+      buyerId: currentUser.uid,
+      buyerName: currentUser.displayName || currentUser.email,
+      sellerId: p.sellerId,
+      productTitle: p.title,
+      amount: p.price,
+      status: "pending",
+      createdAt: serverTimestamp()
+    });
+    const chatId = await ensureChat(p.id, p, currentUser.uid);
+    await updateDoc(doc(db, "chats", chatId), {
+      buyerFullName: `${firstName} ${lastName}`,
+      buyerEmail: email,
+      buyerWhatsapp: whatsapp
+    });
+    const orderText = `Nouvelle demande d'achat au prix affiché (${formatPrice(p.price)})\nNom : ${firstName} ${lastName}\nEmail : ${email}\nWhatsApp : ${whatsapp}`;
+    await addDoc(collection(db, "chats", chatId, "messages"), {
+      senderId: currentUser.uid, senderName: currentUser.displayName || currentUser.email,
+      text: orderText, type: "order", createdAt: serverTimestamp()
+    });
+    await updateDoc(doc(db, "chats", chatId), { lastMessage: "Demande d'achat envoyée", lastMessageAt: serverTimestamp(), lastSenderId: currentUser.uid });
+    showToast("Ta demande a été envoyée au vendeur");
+    openChat(chatId);
+  } catch (err) {
+    console.error(err);
+    showToast("Erreur lors de l'envoi — réessaie");
+  }
+  btn.disabled = false;
+  btn.textContent = "Envoyer ma demande d'achat";
 });
 
 function listenOffers(productId, product) {
@@ -657,6 +710,7 @@ async function ensureChat(productId, product, buyerId) {
       buyerId, buyerName: buyerSnap?.displayName || "Acheteur", buyerPhoto: buyerSnap?.photoURL || null,
       sellerId: product.sellerId, sellerName: product.sellerName, sellerPhoto: product.sellerPhoto || null,
       sellerWhatsapp: product.sellerWhatsapp || null,
+      buyerWhatsapp: null, buyerEmail: null, buyerFullName: null,
       participants: [buyerId, product.sellerId],
       lastMessage: "Conversation démarrée", lastMessageAt: serverTimestamp(), lastSenderId: buyerId
     });
@@ -698,9 +752,10 @@ async function openChat(chatId) {
     ? `<img src="${otherPhoto}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`
     : initials(otherName);
   const waBtn = $("chat-whatsapp-btn");
-  if (currentChatMeta.sellerWhatsapp) {
+  const targetWhatsapp = isBuyer ? currentChatMeta.sellerWhatsapp : currentChatMeta.buyerWhatsapp;
+  if (targetWhatsapp) {
     waBtn.style.display = "flex";
-    waBtn.href = whatsappLink(currentChatMeta.sellerWhatsapp, `Bonjour, à propos de "${currentChatMeta.productTitle}" sur BOULKA.`);
+    waBtn.href = whatsappLink(targetWhatsapp, `Bonjour, à propos de "${currentChatMeta.productTitle}" sur BOULKA.`);
   } else {
     waBtn.style.display = "none";
   }
@@ -720,9 +775,15 @@ function listenChatMessages(chatId) {
       if (m.type === "offer") {
         return `<div class="msg-row system"><div class="msg-bubble">💬 ${escapeHtml(m.text)}</div></div>`;
       }
+      if (m.type === "order") {
+        return `<div class="msg-row system"><div class="msg-bubble order-bubble">🛒 ${escapeHtml(m.text).replace(/\n/g, "<br>")}</div></div>`;
+      }
       return `<div class="msg-row ${mine ? "mine" : ""}"><div><div class="msg-bubble">${escapeHtml(m.text)}</div><div class="msg-time">${time}</div></div></div>`;
     }).join("");
     wrap.scrollTop = wrap.scrollHeight;
+  }, (err) => {
+    console.error("Erreur chargement du chat :", err);
+    showToast("Impossible de charger la conversation");
   });
 }
 
@@ -774,6 +835,9 @@ function listenThreads() {
         </div>`;
     }).join("");
     wrap.querySelectorAll("[data-chat]").forEach(c => c.addEventListener("click", () => openChat(c.dataset.chat)));
+  }, (err) => {
+    console.error("Erreur chargement des messages (index Firestore manquant ?) :", err);
+    $("thread-list").innerHTML = `<p style="font-size:13px;color:var(--danger)">Impossible de charger les messages. Si c'est la première fois, ouvre la console du navigateur (F12) : Firestore affiche un lien pour créer l'index manquant, clique dessus puis réessaie dans une minute.</p>`;
   });
 }
 
@@ -826,6 +890,8 @@ function listenProductReviews(sellerId) {
         <div class="review-top"><span class="review-author">${escapeHtml(r.buyerName)}</span><span class="review-stars">${starsHtml(r.rating)}</span></div>
         ${r.comment ? `<div class="review-comment">${escapeHtml(r.comment)}</div>` : ""}
       </div>`).join("");
+  }, (err) => {
+    console.error("Erreur chargement des avis (index Firestore manquant ?) :", err);
   });
 }
 
@@ -835,6 +901,8 @@ function listenAllReviews() {
     allReviews = snap.docs.map(d => d.data());
     renderGrid();
     renderProfileRating();
+  }, (err) => {
+    console.error("Erreur chargement des avis :", err);
   });
 }
 
