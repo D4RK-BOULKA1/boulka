@@ -29,12 +29,18 @@
         <label>Nom</label>
         <input type="text" id="auth-name" autocomplete="name">
       </div>
-      <div class="field" id="field-account-type" style="display:none">
-        <label>Type de compte</label>
-        <select id="auth-account-type">
-          <option value="particulier">Particulier</option>
-          <option value="professionnel">Professionnel</option>
-        </select>
+      <div class="field-row" id="field-name-row2" style="display:none">
+        <div class="field">
+          <label>Pays</label>
+          <select id="auth-country"></select>
+        </div>
+        <div class="field">
+          <label>Type de compte</label>
+          <select id="auth-account-type">
+            <option value="particulier">Particulier</option>
+            <option value="professionnel">Professionnel</option>
+          </select>
+        </div>
       </div>
       <div class="field-row" id="field-pro" style="display:none">
         <div class="field">
@@ -72,12 +78,26 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="search-input" placeholder="Rechercher sur BOULKA">
       </div>
+      <button class="icon-btn" id="btn-filter-toggle" aria-label="Filtres">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+      </button>
       <button class="icon-btn" id="btn-theme-toggle" aria-label="Basculer le thème">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path id="theme-icon-path" d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
       </button>
       <div class="avatar js-user-avatar" onclick="document.querySelector('.bottom-nav [data-tab=account]').click()"></div>
     </div>
     <div class="pill-row" id="category-row"></div>
+    <div class="filter-panel" id="filter-panel">
+      <div class="filter-row">
+        <select id="filter-country"><option value="">Tous les pays</option></select>
+        <input type="number" id="filter-price-min" placeholder="Prix min">
+        <input type="number" id="filter-price-max" placeholder="Prix max">
+      </div>
+      <div class="filter-row">
+        <label class="filter-check"><input type="checkbox" id="filter-top-rated"> Vendeurs 5★ uniquement</label>
+        <button class="filter-clear" id="btn-filter-clear">Réinitialiser</button>
+      </div>
+    </div>
   </div>
 
   <div id="tab-home">
@@ -92,28 +112,19 @@
         <div class="tile" data-cat="Mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 4l3 2 3-2 4 3-2 3h-2v10H8V10H6L4 7z"/></svg><span>Mode</span></div>
       </div>
       <!-- ============ PUBLICITÉ GOOGLE ADSENSE ============ -->
-
-<!-- Script Google AdSense : à charger une seule fois -->
-<script async
-  src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8805798758463791"
-  crossorigin="anonymous">
-</script>
-
-<!-- Emplacement publicitaire -->
-<div class="ad-container">
-  <ins class="adsbygoogle"
-       style="display:block"
-       data-ad-client="ca-pub-8805798758463791"
-       data-ad-slot="5900930991"
-       data-ad-format="auto"
-       data-full-width-responsive="true"></ins>
-</div>
-
-<script>
-  (adsbygoogle = window.adsbygoogle || []).push({});
-</script>
-
-<!-- ============ FIN PUBLICITÉ ============ -->
+      <script async
+        src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8805798758463791"
+        crossorigin="anonymous"></script>
+      <div class="ad-container">
+        <ins class="adsbygoogle"
+             style="display:block"
+             data-ad-client="ca-pub-8805798758463791"
+             data-ad-slot="5900930991"
+             data-ad-format="auto"
+             data-full-width-responsive="true"></ins>
+      </div>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+      <!-- ============ FIN PUBLICITÉ ============ -->
       <div class="content-header">
         <h2>Nouveautés</h2>
         <span class="result-count" id="result-count"></span>
@@ -133,10 +144,45 @@
       <div>
         <h2 id="profile-name"></h2>
         <div class="seller-sub" id="profile-email"></div>
+        <div class="seller-sub" id="profile-code"></div>
       </div>
     </div>
     <div class="profile-actions"><button class="btn-logout" id="btn-logout">Se déconnecter</button></div>
+
     <div class="content">
+      <div class="rating-summary" id="profile-rating"></div>
+
+      <div class="settings-card" id="whatsapp-banner" style="display:none">
+        <h3>Numéro WhatsApp requis</h3>
+        <p>Relie ton WhatsApp pour pouvoir publier des annonces et être contacté directement par les acheteurs.</p>
+        <div class="field-row">
+          <input type="tel" id="settings-whatsapp" placeholder="Ex : +223 70 00 00 00">
+          <button class="btn-primary" style="width:auto;margin-top:0" id="btn-save-whatsapp">Enregistrer</button>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3>Paramètres du compte</h3>
+        <div class="field-row">
+          <div class="field">
+            <label>Pays</label>
+            <select id="settings-country"></select>
+          </div>
+          <div class="field">
+            <label>Devise d'affichage</label>
+            <select id="settings-currency">
+              <option value="EUR">Euro (€)</option>
+              <option value="XOF">Franc CFA (FCFA)</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Numéro WhatsApp</label>
+          <input type="tel" id="settings-whatsapp-2" placeholder="Ex : +223 70 00 00 00">
+        </div>
+        <button class="btn-primary" id="btn-save-settings">Enregistrer les paramètres</button>
+      </div>
+
       <div class="content-header"><h2>Mes annonces</h2></div>
       <div class="result-count" id="profile-count" style="margin-bottom:14px"></div>
       <div id="profile-grid"></div>
@@ -145,33 +191,36 @@
 
   <div id="tab-notif" style="display:none">
     <div class="content">
-      <div class="content-header"><h2>Notifications</h2></div>
-      <div id="notif-list"></div>
+      <div class="content-header"><h2>Messages</h2></div>
+      <div id="thread-list"></div>
     </div>
   </div>
 
-  <div class="bottom-nav">
-    <button data-tab="home" class="active">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
-      Accueil
-    </button>
-    <button data-tab="account">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>
-      Compte
-    </button>
-    <button id="btn-nav-search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
-      Rechercher
-    </button>
-    <button data-tab="notif">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-      Notifs
-    </button>
-    <button data-tab="sell" id="btn-nav-sell">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.6 12.6L12 21l-8-8L12.4 4H20a2 2 0 0 1 2 2v6.6z"/><circle cx="16" cy="8" r="1.2"/></svg>
-      Vendre
-    </button>
-  </div>
+</div>
+
+<!-- Menu bas : placé HORS de .view pour ne jamais hériter d'un ancêtre avec transform (sinon position:fixed casse) -->
+<div class="bottom-nav" id="bottom-nav" style="display:none">
+  <button data-tab="home" class="active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+    Accueil
+  </button>
+  <button data-tab="account">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>
+    Compte
+  </button>
+  <button id="btn-nav-search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+    Rechercher
+  </button>
+  <button data-tab="notif">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    Messages
+    <span class="badge-dot" id="unread-dot" style="display:none"></span>
+  </button>
+  <button data-tab="sell" id="btn-nav-sell">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.6 12.6L12 21l-8-8L12.4 4H20a2 2 0 0 1 2 2v6.6z"/><circle cx="16" cy="8" r="1.2"/></svg>
+    Vendre
+  </button>
 </div>
 
 <!-- ============ PRODUCT DETAIL VIEW ============ -->
@@ -181,8 +230,16 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
     <div class="brand">B<b>oulka</b></div>
+    <button class="back-btn" id="btn-delete-product" style="display:none;margin-left:auto;background:rgba(196,51,90,.2)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+    </button>
   </div>
-  <div class="detail-photo" id="detail-photo"></div>
+  <div class="detail-photo-wrap">
+    <div class="detail-photo" id="detail-photo-track"></div>
+    <div class="carousel-dots" id="carousel-dots"></div>
+    <button class="carousel-arrow left" id="carousel-prev">‹</button>
+    <button class="carousel-arrow right" id="carousel-next">›</button>
+  </div>
   <div class="detail-body">
     <span class="own-badge" id="detail-owner-badge" style="display:none">C'est ton article</span>
     <div class="detail-cat" id="detail-cat"></div>
@@ -191,28 +248,45 @@
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       <span class="own-badge" style="background:var(--surf-2);color:var(--soft);border:0.5px solid var(--line)" id="detail-condition"></span>
       <span class="own-badge" style="background:var(--surf-2);color:var(--soft);border:0.5px solid var(--line)" id="detail-shipping"></span>
+      <span class="own-badge" style="background:var(--surf-2);color:var(--soft);border:0.5px solid var(--line)" id="detail-country"></span>
     </div>
     <p class="detail-desc" id="detail-desc"></p>
     <div class="seller-row">
       <div class="avatar" id="detail-seller-avatar"></div>
-      <div>
+      <div style="flex:1">
         <div class="seller-name" id="detail-seller-name"></div>
         <div class="seller-sub" id="detail-seller-sub"></div>
+        <div class="stars-line" id="detail-seller-stars"></div>
       </div>
+      <a class="btn-whatsapp" id="detail-whatsapp-btn" target="_blank" rel="noopener" style="display:none">
+        <svg viewBox="0 0 32 32" width="18" height="18"><path fill="currentColor" d="M16 3C9 3 3.4 8.6 3.4 15.6c0 2.5.7 4.8 1.9 6.8L3 29l6.8-2.2c1.9 1 4.1 1.6 6.3 1.6 7 0 12.6-5.6 12.6-12.6C28.7 8.7 23 3 16 3zm0 22.9c-1.9 0-3.8-.5-5.4-1.5l-.4-.2-4 1.3 1.3-3.9-.2-.4a10.4 10.4 0 0 1-1.6-5.6c0-5.8 4.7-10.4 10.4-10.4s10.4 4.7 10.4 10.4c-.1 5.7-4.8 10.3-10.5 10.3zm5.7-7.8c-.3-.2-1.8-.9-2.1-1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.2-.7.1-.3-.2-1.3-.5-2.5-1.6-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.7.1-.1.3-.4.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.2-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4s1.1 2.8 1.2 3c.1.2 2.1 3.2 5.1 4.4.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.8-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.2-.3-.3-.6-.4z"/></svg>
+        WhatsApp
+      </a>
     </div>
     <div class="detail-actions" id="detail-buy-actions">
-      <button class="btn-outline" onclick="document.getElementById('offer-amount').focus()">Négocier</button>
+      <button class="btn-outline" id="btn-open-chat">Discuter</button>
       <button class="btn-primary" id="btn-buy-now">Acheter</button>
     </div>
-    <div class="offers-section">
-      <h3>Offres</h3>
-      <div id="offer-form-wrap" style="margin-bottom:16px">
-        <form id="offer-form" style="display:flex;gap:8px">
-          <input type="number" id="offer-amount" placeholder="Ton prix (€)" min="1" step="0.5" style="flex:1;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surf-2);color:var(--txt)">
-          <button type="submit" class="btn-primary" style="width:auto;padding:0 20px;margin-top:0">Envoyer</button>
-        </form>
+    <div class="offers-section" id="offer-form-wrap">
+      <h3>Faire une offre</h3>
+      <form id="offer-form" style="display:flex;gap:8px">
+        <input type="number" id="offer-amount" placeholder="Ton prix" min="1" step="0.5" style="flex:1;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surf-2);color:var(--txt)">
+        <button type="submit" class="btn-primary" style="width:auto;padding:0 20px;margin-top:0">Envoyer</button>
+      </form>
+    </div>
+
+    <div class="offers-section" id="review-form-wrap">
+      <h3>Laisser un avis au vendeur</h3>
+      <div class="star-input" id="review-star-input" data-value="0">
+        <span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span>
       </div>
-      <div id="offers-list"></div>
+      <textarea id="review-comment" maxlength="300" placeholder="Ton commentaire (optionnel)"></textarea>
+      <button class="btn-primary" style="width:auto;padding:11px 22px" id="btn-submit-review">Publier l'avis</button>
+    </div>
+
+    <div class="offers-section">
+      <h3>Avis sur ce vendeur</h3>
+      <div id="reviews-list"></div>
     </div>
   </div>
 </div>
@@ -228,7 +302,8 @@
   <div class="sell-body">
     <h2 style="margin-bottom:16px">Publier un article</h2>
     <form id="sell-form">
-      <div class="photo-upload" id="photo-preview-wrap"></div>
+      <label class="field-label-top">Photos (1 à 5)</label>
+      <div class="photo-row" id="photo-row"></div>
       <div class="field">
         <label>Titre</label>
         <input type="text" id="sell-title" required maxlength="60" placeholder="Ex : PS5 avec 2 manettes">
@@ -270,6 +345,30 @@
       <button type="submit" class="btn-primary" id="sell-submit">Publier l'annonce</button>
     </form>
   </div>
+</div>
+
+<!-- ============ CHAT VIEW ============ -->
+<div class="view" id="view-chat">
+  <div class="detail-header">
+    <button class="back-btn" id="btn-back-chat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="avatar" id="chat-header-avatar" style="width:32px;height:32px;font-size:13px"></div>
+    <div style="flex:1;min-width:0">
+      <div class="chat-header-name" id="chat-header-name"></div>
+      <div class="chat-header-product" id="chat-header-product"></div>
+    </div>
+    <a class="btn-whatsapp small" id="chat-whatsapp-btn" target="_blank" rel="noopener" style="display:none">
+      <svg viewBox="0 0 32 32" width="16" height="16"><path fill="currentColor" d="M16 3C9 3 3.4 8.6 3.4 15.6c0 2.5.7 4.8 1.9 6.8L3 29l6.8-2.2c1.9 1 4.1 1.6 6.3 1.6 7 0 12.6-5.6 12.6-12.6C28.7 8.7 23 3 16 3zm0 22.9c-1.9 0-3.8-.5-5.4-1.5l-.4-.2-4 1.3 1.3-3.9-.2-.4a10.4 10.4 0 0 1-1.6-5.6c0-5.8 4.7-10.4 10.4-10.4s10.4 4.7 10.4 10.4c-.1 5.7-4.8 10.3-10.5 10.3zm5.7-7.8c-.3-.2-1.8-.9-2.1-1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.2-.7.1-.3-.2-1.3-.5-2.5-1.6-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.7.1-.1.3-.4.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.2-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4s1.1 2.8 1.2 3c.1.2 2.1 3.2 5.1 4.4.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.8-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.2-.3-.3-.6-.4z"/></svg>
+    </a>
+  </div>
+  <div class="chat-messages" id="chat-messages"></div>
+  <form class="chat-input-bar" id="chat-form">
+    <input type="text" id="chat-input" placeholder="Écris un message..." maxlength="500" autocomplete="off">
+    <button type="submit" aria-label="Envoyer">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+    </button>
+  </form>
 </div>
 
 <div class="toast" id="toast"></div>
