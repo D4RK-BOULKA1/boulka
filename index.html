@@ -347,6 +347,48 @@
   </div>
 </div>
 
+<!-- ============ CHECKOUT VIEW (formulaire d'achat) ============ -->
+<div class="view" id="view-checkout">
+  <div class="detail-header">
+    <button class="back-btn" id="btn-back-checkout">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="brand">B<b>oulka</b></div>
+  </div>
+  <div class="sell-body">
+    <div class="checkout-product">
+      <div class="checkout-product-thumb" id="checkout-product-thumb"></div>
+      <div>
+        <div class="checkout-product-title" id="checkout-product-title"></div>
+        <div class="checkout-product-price" id="checkout-product-price"></div>
+      </div>
+    </div>
+    <h2 style="margin-bottom:4px">Tes coordonnées</h2>
+    <p class="checkout-sub">Ces informations seront envoyées directement au vendeur pour qu'il puisse te contacter.</p>
+    <form id="checkout-form">
+      <div class="field-row">
+        <div class="field">
+          <label>Prénom</label>
+          <input type="text" id="checkout-firstname" required placeholder="Awa">
+        </div>
+        <div class="field">
+          <label>Nom</label>
+          <input type="text" id="checkout-lastname" required placeholder="Traoré">
+        </div>
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="checkout-email" required placeholder="awa@email.com">
+      </div>
+      <div class="field">
+        <label>Numéro WhatsApp</label>
+        <input type="tel" id="checkout-whatsapp" required placeholder="Ex : +223 70 00 00 00">
+      </div>
+      <button type="submit" class="btn-primary" id="checkout-submit">Envoyer ma demande d'achat</button>
+    </form>
+  </div>
+</div>
+
 <!-- ============ CHAT VIEW ============ -->
 <div class="view" id="view-chat">
   <div class="detail-header">
