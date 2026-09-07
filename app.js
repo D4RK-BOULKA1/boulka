@@ -657,8 +657,7 @@ $("detail-photo-track").addEventListener("click", e => {
   const modal=$("photo-lightbox"), big=$("photo-lightbox-img");
   if(modal && big){ big.src=img.src; modal.classList.add("show"); }
 });
-const lightboxClose = $("photo-lightbox-close");
-if (lightboxClose) lightboxClose.addEventListener("click", () => { const modal = $("photo-lightbox"); if (modal) modal.classList.remove("show"); });
+$("photo-lightbox-close").addEventListener("click",()=>$("photo-lightbox").classList.remove("show"));
 $("photo-lightbox").addEventListener("click",e=>{ if(e.target.id==="photo-lightbox") e.currentTarget.classList.remove("show"); });
 
 $("btn-delete-product").addEventListener("click", async () => {
@@ -1167,6 +1166,27 @@ document.querySelectorAll(".bottom-nav button[data-tab]").forEach(b => b.addEven
 function openAdminGate() {
   const code = prompt("Code administrateur BOULKA");
   if (code !== ADMIN_CODE) { if (code !== null) showToast("Code administrateur incorrect"); return; }
+
+  // IMPORTANT : le code ci-dessus n'est qu'un verrou d'écran côté client.
+  // Les vraies permissions (lire tous les utilisateurs/annonces/conversations,
+  // bannir, supprimer...) sont contrôlées par firestore.rules, qui exigent que
+  // le document users/{uid} du compte connecté ait le champ isAdmin = true.
+  // Un utilisateur ne peut PAS se donner ce droit lui-même depuis l'app (c'est
+  // volontaire, pour la sécurité) : il faut l'activer manuellement dans la
+  // console Firebase.
+  if (!currentUserProfile?.isAdmin) {
+    alert(
+      "Le code est correct, mais ton compte n'a pas encore le droit administrateur dans la base de données (isAdmin = true).\n\n" +
+      "C'est fait exprès : personne ne peut se donner ce droit depuis l'application, sinon ce ne serait pas sécurisé.\n\n" +
+      "Pour l'activer :\n" +
+      "1. Console Firebase > Firestore Database\n" +
+      "2. Collection \"users\" > ton document (uid : " + (currentUser?.uid || "inconnu") + ")\n" +
+      "3. Ajoute un champ isAdmin (type booléen) = true\n" +
+      "4. Recharge la page BOULKA et reconnecte-toi"
+    );
+    return;
+  }
+
   isAdminSession = true;
   $("admin-gate").style.display = "none";
   $("admin-panel").style.display = "block";
@@ -1188,8 +1208,21 @@ async function loadAdminData() {
     $("admin-reports").innerHTML = reportsSnap.docs.map(d=>{const r=d.data();return `<div class="admin-row"><div><b>${escapeHtml(r.reason||"Signalement")}</b><small>${escapeHtml(r.reporterName||"")} · ${escapeHtml(r.productId||"")} · ${r.status||"open"}</small></div><button class="admin-danger" data-close-report="${d.id}">Classer</button></div>`}).join("") || `<div class="empty-mini">Aucun signalement.</div>`;
     $("admin-users").querySelectorAll("[data-ban]").forEach(b=>b.addEventListener("click",()=>adminToggleBan(b.dataset.ban)));
     $("admin-products").querySelectorAll("[data-delete-product]").forEach(b=>b.addEventListener("click",()=>adminDeleteProduct(b.dataset.deleteProduct)));
-    $("admin-reports").querySelectorAll("[data-close-report]").forEach(b=>b.addEventListener("click",async()=>{await updateDoc(doc(db,"reports",b.dataset.closeReport),{status:"closed",closedAt:serverTimestamp()});loadAdminData();}));
-  } catch(e) { console.error(e); showToast("Impossible de charger l'administration"); }
+    $("admin-reports").querySelectorAll("[data-close-report]").forEach(b=>b.addEventListener("click",async()=>{
+      try {
+        await updateDoc(doc(db,"reports",b.dataset.closeReport),{status:"closed",closedAt:serverTimestamp()});
+        loadAdminData();
+      } catch(e) { console.error(e); showToast("Action refusée par Firestore (vérifie isAdmin sur ton compte)"); }
+    }));
+  } catch(e) {
+    console.error(e);
+    $("admin-stats").innerHTML = "";
+    const deniedMsg = `<div class="empty-mini">Accès refusé par Firestore. Vérifie que ton compte a bien le champ isAdmin = true dans la collection "users" (Firebase Console).</div>`;
+    $("admin-users").innerHTML = deniedMsg;
+    $("admin-products").innerHTML = "";
+    $("admin-reports").innerHTML = "";
+    showToast("Impossible de charger l'administration — droits insuffisants");
+  }
 }
 
 
@@ -1197,25 +1230,44 @@ async function adminToggleBan(uid) {
   const snap = await getDoc(doc(db, "users", uid)); if (!snap.exists()) return;
   const banned = !!snap.data().banned;
   if (!confirm(banned ? "Réactiver ce compte ?" : "Bannir cet utilisateur ?")) return;
-  await updateDoc(doc(db, "users", uid), { banned: !banned });
-  showToast(banned ? "Compte réactivé" : "Utilisateur banni"); loadAdminData();
+  try {
+    await updateDoc(doc(db, "users", uid), { banned: !banned });
+    showToast(banned ? "Compte réactivé" : "Utilisateur banni");
+    loadAdminData();
+  } catch (e) {
+    console.error(e);
+    showToast("Action refusée par Firestore (vérifie isAdmin sur ton compte)");
+  }
 }
 
 async function adminDeleteProduct(id) {
   if (!confirm("Supprimer définitivement cette annonce ?")) return;
-  await deleteDoc(doc(db, "products", id)); showToast("Annonce supprimée"); loadAdminData();
+  try {
+    await deleteDoc(doc(db, "products", id));
+    showToast("Annonce supprimée");
+    loadAdminData();
+  } catch (e) {
+    console.error(e);
+    showToast("Suppression refusée par Firestore (vérifie isAdmin sur ton compte)");
+  }
 }
 
 async function adminSendMessage() {
   const uid = $("admin-message-user").value.trim(); const text = $("admin-message-text").value.trim();
   if (!uid || !text) { showToast("Choisis un utilisateur et écris un message"); return; }
-  const userSnap = await getDoc(doc(db, "users", uid)); if (!userSnap.exists()) return;
-  const u = userSnap.data();
-  const chatId = `admin__${uid}`;
-  await setDoc(doc(db, "chats", chatId), { participants:[uid], adminMessage:true, buyerId:uid, sellerId:"ADMIN", buyerName:u.displayName||u.email||"Utilisateur", sellerName:"BOULKA Admin", sellerPhoto:null, productTitle:"Message de l'administration", lastMessage:text, lastMessageAt:serverTimestamp(), lastSenderId:"ADMIN", unreadBy:[uid] }, { merge:true });
-  await addDoc(collection(db, "chats", chatId, "messages"), { senderId:"ADMIN", senderName:"BOULKA Admin", text, type:"admin", readBy:["ADMIN"], createdAt:serverTimestamp() });
-  await addDoc(collection(db,"notifications"), { toUserId:uid, fromUserId:currentUser.uid, fromName:"BOULKA Admin", title:"Message de BOULKA", text, read:false, createdAt:serverTimestamp() });
-  $("admin-message-text").value=""; showToast("Message envoyé");
+  try {
+    const userSnap = await getDoc(doc(db, "users", uid));
+    if (!userSnap.exists()) { showToast("Utilisateur introuvable"); return; }
+    const u = userSnap.data();
+    const chatId = `admin__${uid}`;
+    await setDoc(doc(db, "chats", chatId), { participants:[uid], adminMessage:true, buyerId:uid, sellerId:"ADMIN", buyerName:u.displayName||u.email||"Utilisateur", sellerName:"BOULKA Admin", sellerPhoto:null, productTitle:"Message de l'administration", lastMessage:text, lastMessageAt:serverTimestamp(), lastSenderId:"ADMIN", unreadBy:[uid] }, { merge:true });
+    await addDoc(collection(db, "chats", chatId, "messages"), { senderId:"ADMIN", senderName:"BOULKA Admin", text, type:"admin", readBy:["ADMIN"], createdAt:serverTimestamp() });
+    await addDoc(collection(db,"notifications"), { toUserId:uid, fromUserId:currentUser.uid, fromName:"BOULKA Admin", title:"Message de BOULKA", text, read:false, createdAt:serverTimestamp() });
+    $("admin-message-text").value=""; showToast("Message envoyé");
+  } catch (e) {
+    console.error(e);
+    showToast("Envoi refusé par Firestore (vérifie isAdmin sur ton compte)");
+  }
 }
 
 $("btn-admin-open").addEventListener("click", openAdminGate);
