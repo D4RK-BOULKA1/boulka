@@ -199,6 +199,8 @@ async function ensureUserProfile(user, defaults) {
       currency: "EUR",
       whatsapp: null,
       userCode: genUserCode(),
+      isAdmin: false,
+      banned: false,
       createdAt: serverTimestamp()
     });
   }
@@ -1176,13 +1178,9 @@ function openAdminGate() {
   // console Firebase.
   if (!currentUserProfile?.isAdmin) {
     alert(
-      "Le code est correct, mais ton compte n'a pas encore le droit administrateur dans la base de données (isAdmin = true).\n\n" +
-      "C'est fait exprès : personne ne peut se donner ce droit depuis l'application, sinon ce ne serait pas sécurisé.\n\n" +
-      "Pour l'activer :\n" +
-      "1. Console Firebase > Firestore Database\n" +
-      "2. Collection \"users\" > ton document (uid : " + (currentUser?.uid || "inconnu") + ")\n" +
-      "3. Ajoute un champ isAdmin (type booléen) = true\n" +
-      "4. Recharge la page BOULKA et reconnecte-toi"
+      "Le code est correct: mais force a toi tu crois quoi la vie c ps rose :\n" 
+       
+     
     );
     return;
   }
