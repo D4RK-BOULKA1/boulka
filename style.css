@@ -296,3 +296,50 @@ a { color: inherit; text-decoration:none; }
 .chat-input-bar input { flex:1; padding: 11px 14px; border-radius: 22px; border: 1px solid var(--line); background: var(--surf-2); color: var(--txt); }
 .chat-input-bar button { width:40px; height:40px; border-radius:50%; background: var(--blue); color:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .chat-input-bar button svg { width:18px; height:18px; }
+/* ---------- Presence / professional chat ---------- */
+.presence-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin:0 5px 1px 0; }
+.presence-dot.online { background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.12); }
+.presence-dot.offline { background:var(--mut); }
+.chat-header-status { color:rgba(255,255,255,.62); font-size:10.5px; margin-top:2px; }
+.chat-image-btn { width:40px; height:40px; border-radius:50%; background:var(--surf-2); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
+.chat-image-btn input { display:none; }
+.chat-image { display:block; max-width:240px; max-height:280px; border-radius:12px; object-fit:cover; }
+.image-bubble { padding:4px !important; overflow:hidden; }
+.unread-pill { font-size:10px; font-weight:700; color:#fff; background:var(--blue); padding:4px 7px; border-radius:10px; flex-shrink:0; }
+.btn-admin-ghost { background:linear-gradient(135deg,var(--hero),#152a54); color:#fff; border:1px solid rgba(255,255,255,.14); padding:9px 13px; border-radius:10px; font-size:12.5px; font-weight:700; margin-right:8px; }
+
+/* ---------- Premium admin ---------- */
+#view-admin.active { min-height:100vh; background:var(--bg); }
+.admin-chip { font-size:9px; letter-spacing:.08em; color:var(--glow); border:1px solid rgba(0,225,255,.35); padding:3px 6px; border-radius:6px; vertical-align:middle; }
+.admin-refresh { margin-left:auto; width:34px; height:34px; border-radius:50%; color:#fff; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); font-size:18px; }
+.admin-shell { max-width:1100px; margin:0 auto; padding:24px 20px 60px; }
+.admin-hero { display:flex; justify-content:space-between; align-items:center; gap:18px; background:linear-gradient(135deg,var(--hero),#152a54); color:#fff; border-radius:22px; padding:28px; margin-bottom:18px; box-shadow:0 16px 40px rgba(10,24,48,.14); }
+.admin-kicker { font-size:10px; text-transform:uppercase; letter-spacing:.12em; color:var(--glow); font-weight:800; }
+.admin-hero h1 { font-size:26px; margin:5px 0 6px; }
+.admin-hero p { margin:0; color:rgba(255,255,255,.62); font-size:13px; }
+.admin-lock { border:1px solid rgba(255,255,255,.16); border-radius:12px; padding:10px 12px; font-size:10px; letter-spacing:.1em; font-weight:800; color:rgba(255,255,255,.75); }
+.admin-stats { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:18px; }
+.admin-stats > div { background:var(--surf); border:1px solid var(--line); border-radius:16px; padding:16px 18px; }
+.admin-stats b { display:block; font:700 26px 'Space Grotesk',sans-serif; color:var(--blue); }
+.admin-stats span { font-size:12px; color:var(--mut); }
+.admin-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.admin-card { background:var(--surf); border:1px solid var(--line); border-radius:18px; padding:16px; box-shadow:var(--shadow); }
+.admin-card-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.admin-card-head h2 { font-size:16px; }
+.admin-card-head span { font-size:10px; color:var(--mut); text-transform:uppercase; letter-spacing:.08em; }
+.admin-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 0; border-top:1px solid var(--line); }
+.admin-row > div { min-width:0; }
+.admin-row b { display:block; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.admin-row small { display:block; color:var(--mut); font-size:10.5px; margin-top:2px; }
+.admin-danger { background:rgba(196,51,90,.1); color:var(--danger); border:1px solid rgba(196,51,90,.25); padding:7px 10px; border-radius:8px; font-size:11px; font-weight:700; flex-shrink:0; }
+.admin-message-card { grid-column:1/-1; }
+.admin-message-card input,.admin-message-card textarea { width:100%; margin-bottom:10px; padding:11px 12px; border:1px solid var(--line); border-radius:10px; background:var(--surf-2); color:var(--txt); font:14px Inter,sans-serif; }
+.admin-message-card textarea { min-height:100px; resize:vertical; }
+.admin-gate { max-width:430px; margin:14vh auto; padding:30px 22px; text-align:center; background:var(--surf); border:1px solid var(--line); border-radius:22px; box-shadow:0 18px 50px rgba(10,24,48,.1); }
+.admin-gate-icon { width:52px; height:52px; border-radius:16px; margin:0 auto 14px; display:flex; align-items:center; justify-content:center; background:var(--hero); color:var(--glow); font-size:24px; }
+.admin-gate h2 { font-size:21px; margin-bottom:7px; }
+.admin-gate p { color:var(--soft); font-size:13px; margin-bottom:18px; }
+@media(max-width:700px){ .admin-grid{grid-template-columns:1fr}.admin-message-card{grid-column:auto}.admin-hero{padding:22px}.admin-hero h1{font-size:22px} }
+.card-wa-wrap { position:absolute; right:7px; bottom:7px; z-index:4; }
+.card-wa { display:inline-flex; align-items:center; gap:4px; background:var(--wa); color:#fff; border-radius:16px; padding:6px 9px; font-size:10.5px; font-weight:800; box-shadow:0 4px 12px rgba(0,0,0,.15); }
+.card-wa:hover { filter:brightness(.95); }
