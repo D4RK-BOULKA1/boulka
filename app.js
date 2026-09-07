@@ -657,8 +657,8 @@ $("detail-photo-track").addEventListener("click", e => {
   const modal=$("photo-lightbox"), big=$("photo-lightbox-img");
   if(modal && big){ big.src=img.src; modal.classList.add("show"); }
 });
-$("photo-lightbox-close").addEventListener("click",()=>$("photo-lightbox").classList.remove("show"));
-$("photo-lightbox").addEventListener("click",e=>{ if(e.target.id==="photo-lightbox") e.currentTarget.classList.remove("show"); });
+$("photo-lightbox-close")?.addEventListener("click",()=>$("photo-lightbox").classList.remove("show"));
+$("photo-lightbox")?.addEventListener("click",e=>{ if(e.target.id==="photo-lightbox") e.currentTarget.classList.remove("show"); });
 
 $("btn-delete-product").addEventListener("click", async () => {
   if (!confirm("Supprimer définitivement cette annonce ?")) return;
