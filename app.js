@@ -281,7 +281,7 @@ function fillSettingsForm() {
   $("settings-currency").value = currentUserProfile.currency || "EUR";
   $("settings-whatsapp-2").value = currentUserProfile.whatsapp || "";
   $("whatsapp-banner").style.display = currentUserProfile.whatsapp ? "none" : "block";
-  $("profile-code").textContent = currentUserProfile.userCode ? ("ID : " + currentUserProfile.userCode) : "";
+  $("profile-code").textContent = (currentUserProfile.userCode ? ("ID : " + currentUserProfile.userCode + " · ") : "") + "UID : " + (currentUser?.uid || "?");
 }
 
 async function saveSettings(whatsappOnly) {
