@@ -8,7 +8,7 @@ import {
 import {
   getFirestore, collection, collectionGroup, addDoc, doc, getDoc, setDoc,
   query, where, orderBy, onSnapshot, serverTimestamp, updateDoc, deleteDoc, limit, getDocs,
-  arrayUnion
+  arrayUnion, increment
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app = initializeApp(firebaseConfig);
@@ -45,6 +45,9 @@ let authMode = "signin";
 let theme = "light";
 let unsubOtherPresence = null;
 let isAdminSession = false;
+let sortMode = "recent";
+let currentFavoritesOnly = false;
+let userFavoritesIndex = {};
 const ADMIN_CODE = "Boulka_2010";
 
 const $ = (id) => document.getElementById(id);
@@ -251,6 +254,7 @@ onAuthStateChanged(auth, async (user) => {
     showView("view-app");
     switchTab("home");
     listenProducts();
+    listenNotifications();
     listenThreads();
     listenAllReviews();
     fillSettingsForm();
@@ -306,6 +310,7 @@ function listenProducts() {
     renderCategoryChips();
     renderGrid();
     renderProfileListings();
+    refreshFavoritesIndex();
   }, (err) => {
     console.error(err);
     $("product-grid").innerHTML = "";
@@ -315,6 +320,8 @@ function listenProducts() {
     showToast("Erreur de chargement — vérifie ta config Firebase");
   });
 }
+
+async function refreshFavoritesIndex() { try { const s=await getDocs(collection(db,"users")); userFavoritesIndex={}; s.docs.forEach(d=>(d.data().favorites||[]).forEach(pid=>userFavoritesIndex[pid]=(userFavoritesIndex[pid]||0)+1)); renderProfileListings(); } catch(e){} }
 
 function renderCategoryChips() {
   const row = $("category-row");
@@ -355,6 +362,10 @@ function renderGrid() {
   if ($("filter-top-rated").checked) {
     list = list.filter(p => { const r = sellerAvg(p.sellerId); return r && r.avg >= 5; });
   }
+  if (currentFavoritesOnly) list = list.filter(p => (currentUserProfile?.favorites || []).includes(p.id));
+  if (sortMode === "priceAsc") list = [...list].sort((a,b) => Number(a.price)-Number(b.price));
+  if (sortMode === "priceDesc") list = [...list].sort((a,b) => Number(b.price)-Number(a.price));
+  if (sortMode === "rating") list = [...list].sort((a,b) => (sellerAvg(b.sellerId)?.avg||0)-(sellerAvg(a.sellerId)?.avg||0));
   $("result-count").textContent = list.length + (list.length > 1 ? " articles" : " article");
   const grid = $("product-grid");
   const empty = $("empty-state");
@@ -362,6 +373,7 @@ function renderGrid() {
   empty.style.display = "none";
   grid.innerHTML = list.map(productCardHtml).join("");
   grid.querySelectorAll(".product-card").forEach(card => card.addEventListener("click", () => openProduct(card.dataset.id)));
+  grid.querySelectorAll("[data-favorite]").forEach(btn => btn.addEventListener("click", async e => { e.stopPropagation(); await toggleFavorite(btn.dataset.favorite); }));
   grid.querySelectorAll("[data-wa]").forEach(a => a.addEventListener("click", e => e.stopPropagation()));
 }
 
@@ -375,10 +387,15 @@ function productCardHtml(p) {
   const photos = p.photos && p.photos.length ? p.photos : (p.photo ? [p.photo] : []);
   const thumb = photos[0] ? `<img src="${photos[0]}" alt="">` : escapeHtml(p.title);
   const r = sellerAvg(p.sellerId);
+  const isFav = (currentUserProfile?.favorites || []).includes(p.id);
+  const status = p.status || "available";
+  const statusLabel = status === "sold" ? "Vendu" : status === "reserved" ? "Réservé" : "Disponible";
   return `
     <div class="product-card" data-id="${p.id}">
+      <span class="status-badge status-${status}">${statusLabel}</span>
       ${p.condition ? `<span class="condition-badge">${escapeHtml(p.condition)}</span>` : ""}
       ${p.sellerIsPro ? `<span class="pro-badge">PRO</span>` : ""}
+      <button class="favorite-btn ${isFav ? "active" : ""}" data-favorite="${p.id}" aria-label="Favori">${isFav ? "♥" : "♡"}</button>
       <div class="product-thumb" style="background:${color}">${thumb}${photos.length > 1 ? `<span class="photo-count-badge">1/${photos.length}</span>` : ""}<span class="card-wa-wrap">${p.sellerWhatsapp ? `<a class="card-wa" href="${whatsappLink(p.sellerWhatsapp, `Bonjour, je suis intéressé(e) par "${p.title}" sur BOULKA.`)}" target="_blank" rel="noopener" data-wa>WhatsApp</a>` : ""}</span></div>
       <div class="product-card-body">
         <div class="product-title">${escapeHtml(p.title)}</div>
@@ -387,6 +404,20 @@ function productCardHtml(p) {
         ${r ? `<div class="product-stars">${starsHtml(r.avg)} (${r.count})</div>` : ""}
       </div>
     </div>`;
+}
+
+async function toggleFavorite(productId) {
+  if (!currentUser || !currentUserProfile) return;
+  const favs = [...(currentUserProfile.favorites || [])];
+  const i = favs.indexOf(productId);
+  if (i >= 0) favs.splice(i, 1); else favs.push(productId);
+  try {
+    await updateDoc(doc(db, "users", currentUser.uid), { favorites: favs });
+    currentUserProfile.favorites = favs;
+    renderGrid();
+    renderProfileListings();
+    showToast(i >= 0 ? "Retiré des favoris" : "Ajouté aux favoris ♥");
+  } catch(e) { console.error(e); showToast("Impossible de modifier les favoris"); }
 }
 
 function skeletonGridHtml(count) {
@@ -491,6 +522,7 @@ $("sell-form").addEventListener("submit", async (e) => {
       sellerIsPro: currentUserProfile?.accountType === "professionnel",
       sellerCountry: currentUserProfile?.country || null,
       sellerWhatsapp: currentUserProfile?.whatsapp || null,
+      status: "available",
       createdAt: serverTimestamp()
     });
     showView("view-app");
@@ -579,6 +611,13 @@ function renderProductDetail(p) {
   $("detail-country").textContent = p.sellerCountry || "";
   $("detail-country").style.display = p.sellerCountry ? "inline-block" : "none";
   $("detail-desc").textContent = p.description || "Pas de description.";
+  const detailStatus = $("detail-status");
+  const normalizedStatus = p.status || "available";
+  if (detailStatus) detailStatus.textContent = normalizedStatus === "sold" ? "Vendu" : normalizedStatus === "reserved" ? "Réservé" : "Disponible";
+  const statusSelect = $("detail-status-select");
+  if (statusSelect) statusSelect.value = normalizedStatus;
+  const favBtn = $("detail-favorite-btn");
+  if (favBtn) { favBtn.style.display = isOwner ? "none" : "flex"; favBtn.textContent = (currentUserProfile?.favorites || []).includes(p.id) ? "♥" : "♡"; favBtn.classList.toggle("active", (currentUserProfile?.favorites || []).includes(p.id)); }
   $("detail-owner-badge").style.display = isOwner ? "inline-block" : "none";
   $("detail-seller-avatar").innerHTML = p.sellerPhoto
     ? `<img src="${p.sellerPhoto}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`
@@ -594,6 +633,10 @@ function renderProductDetail(p) {
   renderStarInput();
   $("review-comment").value = "";
   $("btn-delete-product").style.display = isOwner ? "flex" : "none";
+  const statusWrap = $("detail-status-wrap");
+  if (statusWrap) statusWrap.style.display = isOwner ? "flex" : "none";
+  const reportBtn = $("btn-report-product");
+  if (reportBtn) reportBtn.style.display = isOwner ? "none" : "flex";
 
   const waBtn = $("detail-whatsapp-btn");
   if (!isOwner && p.sellerWhatsapp) {
@@ -608,6 +651,14 @@ $("btn-back-detail").addEventListener("click", () => {
   showView("view-app");
   switchTab(document.querySelector(".bottom-nav button.active")?.dataset.tab || "home");
 });
+
+$("detail-photo-track").addEventListener("click", e => {
+  const img=e.target.closest("img"); if(!img) return;
+  const modal=$("photo-lightbox"), big=$("photo-lightbox-img");
+  if(modal && big){ big.src=img.src; modal.classList.add("show"); }
+});
+$("photo-lightbox-close").addEventListener("click",()=>$("photo-lightbox").classList.remove("show"));
+$("photo-lightbox").addEventListener("click",e=>{ if(e.target.id==="photo-lightbox") e.currentTarget.classList.remove("show"); });
 
 $("btn-delete-product").addEventListener("click", async () => {
   if (!confirm("Supprimer définitivement cette annonce ?")) return;
@@ -638,6 +689,7 @@ $("offer-form").addEventListener("submit", async (e) => {
     createdAt: serverTimestamp()
   });
   await postChatMessage(currentProductId, p, "offer", `Offre envoyée : ${formatPrice(amount)}`, amount);
+  await createNotification(p.sellerId, "Nouvelle offre", `Une offre de ${formatPrice(amount)} a été envoyée pour « ${p.title} ».`);
   $("offer-amount").value = "";
   showToast("Offre envoyée au vendeur — retrouve la conversation dans Messages");
 });
@@ -722,6 +774,24 @@ function listenOffers(productId, product) {
       if (visible.length && wrap) { /* le vendeur gère les offres via le chat désormais */ }
     }
   });
+}
+
+// ---------------- NOTIFICATIONS ----------------
+async function createNotification(toUserId, title, text) {
+  if (!toUserId || !currentUser || toUserId === currentUser.uid) return;
+  try { await addDoc(collection(db,"notifications"), { toUserId, fromUserId:currentUser.uid, fromName:currentUser.displayName||currentUser.email||"Utilisateur", title, text, read:false, createdAt:serverTimestamp() }); } catch(e){ console.warn("Notification non créée", e); }
+}
+
+async function listenNotifications() {
+  if (!currentUser) return;
+  const q = query(collection(db,"notifications"), where("toUserId","==",currentUser.uid), limit(30));
+  onSnapshot(q, snap => {
+    const wrap=$("notification-list"); if(!wrap) return;
+    const rows=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+    wrap.innerHTML=rows.length ? rows.map(n=>`<div class="activity-card ${n.read?"":"unread"}"><div class="activity-icon">${n.title?.includes("offre")?"💶":"🔔"}</div><div><b>${escapeHtml(n.title||"Notification")}</b><p>${escapeHtml(n.text||"")}</p><small>${n.createdAt?.toDate?n.createdAt.toDate().toLocaleString("fr-FR"):"À l'instant"}</small></div></div>`).join("") : `<div class="empty-mini">Aucune notification pour le moment.</div>`;
+    const unread=rows.filter(n=>!n.read).length;
+    const dot=$("notification-dot"); if(dot) dot.style.display=unread?"block":"none";
+  }, ()=>{});
 }
 
 // ---------------- CHAT (acheteur / vendeur) ----------------
@@ -991,6 +1061,7 @@ $("btn-submit-review").addEventListener("click", async () => {
       rating: reviewStarValue, comment: $("review-comment").value.trim(),
       createdAt: serverTimestamp()
     });
+    await createNotification(p.sellerId, "Nouvel avis", `Tu as reçu un nouvel avis sur « ${p.title} ».`);
     showToast("Avis publié, merci !");
     reviewStarValue = 0; renderStarInput(); $("review-comment").value = "";
   } catch (err) {
@@ -1049,6 +1120,10 @@ function renderProfileListings() {
   $("profile-email").textContent = currentUser.email || "";
   renderProfileRating();
   const mine = allProducts.filter(p => p.sellerId === currentUser.uid);
+  const favCount = (currentUserProfile?.favorites || []).length;
+  const favProducts = allProducts.filter(p => (currentUserProfile?.favorites || []).includes(p.id));
+  const dash = $("seller-dashboard");
+  if (dash) { const receivedFavs = allProducts.filter(p=>p.sellerId===currentUser.uid).reduce((n,p)=>n+(userFavoritesIndex[p.id]||0),0); dash.innerHTML = `<div><b>${mine.length}</b><span>Annonces</span></div><div><b>${favCount}</b><span>Mes favoris</span></div><div><b>${receivedFavs}</b><span>Favoris reçus</span></div><div><b>${allProducts.filter(p=>p.sellerId===currentUser.uid && p.status==="sold").length}</b><span>Vendus</span></div>`; }
   $("profile-count").textContent = mine.length + (mine.length > 1 ? " annonces publiées" : " annonce publiée");
   const grid = $("profile-grid");
   if (mine.length === 0) {
@@ -1057,15 +1132,32 @@ function renderProfileListings() {
   }
   grid.innerHTML = `<div class="grid">${mine.map(productCardHtml).join("")}</div>`;
   grid.querySelectorAll(".product-card").forEach(card => card.addEventListener("click", () => openProduct(card.dataset.id)));
+  grid.querySelectorAll("[data-favorite]").forEach(btn => btn.addEventListener("click", async e => { e.stopPropagation(); await toggleFavorite(btn.dataset.favorite); }));
+}
+
+function renderFavorites() {
+  const wrap=$("favorites-grid"); if(!wrap) return;
+  const favs=allProducts.filter(p=>(currentUserProfile?.favorites||[]).includes(p.id));
+  wrap.innerHTML=favs.length?`<div class="grid">${favs.map(productCardHtml).join("")}</div>`:`<div class="empty-mini">Tu n'as pas encore enregistré de favori. Appuie sur ♡ sur une annonce.</div>`;
+  wrap.querySelectorAll(".product-card").forEach(c=>c.addEventListener("click",()=>openProduct(c.dataset.id)));
+  wrap.querySelectorAll("[data-favorite]").forEach(b=>b.addEventListener("click",async e=>{e.stopPropagation();await toggleFavorite(b.dataset.favorite);renderFavorites();}));
+}
+function renderActivity() {
+  const wrap=$("notification-list"); if(!wrap) return;
+  const unreadChats=[...document.querySelectorAll(".thread-card")].filter(x=>x.querySelector(".unread-pill")).length;
+  const msg=unreadChats?`Tu as ${unreadChats} conversation${unreadChats>1?"s":""} non lue${unreadChats>1?"s":""}.`:`Tes messages sont à jour.`;
+  const el=$("activity-summary"); if(el) el.innerHTML=`<div class="activity-card"><div class="activity-icon">💬</div><div><b>Messages</b><p>${msg}</p></div></div>`;
 }
 
 // ---------------- NAV ----------------
 
 function switchTab(tab) {
   document.querySelectorAll(".bottom-nav button[data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-  ["home", "account", "notif"].forEach(t => $("tab-" + t).style.display = t === tab ? "block" : "none");
+  ["home", "account", "notif", "favorites"].forEach(t => { const el=$("tab-"+t); if(el) el.style.display = t === tab ? "block" : "none"; });
   showView("view-app");
-  if (tab === "account") { renderProfileListings(); fillSettingsForm(); }
+  if (tab === "account") { currentFavoritesOnly=false; renderProfileListings(); fillSettingsForm(); }
+  if (tab === "favorites") { currentFavoritesOnly=true; renderFavorites(); }
+  if (tab === "notif") { currentFavoritesOnly=false; renderThreads(); renderActivity(); }
 }
 document.querySelectorAll(".bottom-nav button[data-tab]").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
 
@@ -1083,14 +1175,22 @@ function openAdminGate() {
 
 async function loadAdminData() {
   if (!isAdminSession) return;
-  const usersSnap = await getDocs(collection(db, "users"));
-  const productsSnap = await getDocs(collection(db, "products"));
-  $("admin-stats").innerHTML = `<div><b>${usersSnap.size}</b><span>Utilisateurs</span></div><div><b>${productsSnap.size}</b><span>Annonces</span></div>`;
-  $("admin-users").innerHTML = usersSnap.docs.map(d => { const u=d.data(); return `<div class="admin-row"><div><b>${escapeHtml(u.displayName || u.email || "Utilisateur")}</b><small>${escapeHtml(u.email || "")} · ${u.banned ? "Banni" : (u.online ? "En ligne" : "Hors ligne")}</small></div><button class="admin-danger" data-ban="${d.id}">${u.banned ? "Débannir" : "Bannir"}</button></div>`; }).join("");
-  $("admin-products").innerHTML = productsSnap.docs.map(d => { const p=d.data(); return `<div class="admin-row"><div><b>${escapeHtml(p.title || "Annonce")}</b><small>${escapeHtml(p.sellerName || "")} · ${formatPrice(p.price)}</small></div><button class="admin-danger" data-delete-product="${d.id}">Supprimer</button></div>`; }).join("");
-  $("admin-users").querySelectorAll("[data-ban]").forEach(btn => btn.addEventListener("click", () => adminToggleBan(btn.dataset.ban)));
-  $("admin-products").querySelectorAll("[data-delete-product]").forEach(btn => btn.addEventListener("click", () => adminDeleteProduct(btn.dataset.deleteProduct)));
+  try {
+    const [usersSnap, productsSnap, reportsSnap, chatsSnap] = await Promise.all([getDocs(collection(db,"users")),getDocs(collection(db,"products")),getDocs(collection(db,"reports")),getDocs(collection(db,"chats"))]);
+    $("admin-stats").innerHTML = `<div><b>${usersSnap.size}</b><span>Utilisateurs</span></div><div><b>${productsSnap.size}</b><span>Annonces</span></div><div><b>${chatsSnap.size}</b><span>Conversations</span></div><div><b>${reportsSnap.size}</b><span>Signalements</span></div>`;
+    const us=($("admin-user-search")?.value||"").toLowerCase();
+    const ps=($("admin-product-search")?.value||"").toLowerCase();
+    const users=usersSnap.docs.filter(d=>{const u=d.data();return !us || `${u.displayName||""} ${u.email||""}`.toLowerCase().includes(us)});
+    const products=productsSnap.docs.filter(d=>{const p=d.data();return !ps || `${p.title||""} ${p.sellerName||""}`.toLowerCase().includes(ps)});
+    $("admin-users").innerHTML = users.map(d=>{const u=d.data();return `<div class="admin-row"><div><b>${escapeHtml(u.displayName||u.email||"Utilisateur")}</b><small>${escapeHtml(u.email||"")} · ${u.banned?"Banni":(u.online?"En ligne":"Hors ligne")}</small></div><button class="admin-danger" data-ban="${d.id}">${u.banned?"Débannir":"Bannir"}</button></div>`}).join("") || `<div class="empty-mini">Aucun utilisateur.</div>`;
+    $("admin-products").innerHTML = products.map(d=>{const p=d.data();return `<div class="admin-row"><div><b>${escapeHtml(p.title||"Annonce")}</b><small>${escapeHtml(p.sellerName||"")} · ${formatPrice(p.price)} · ${p.status||"available"}</small></div><button class="admin-danger" data-delete-product="${d.id}">Supprimer</button></div>`}).join("") || `<div class="empty-mini">Aucune annonce.</div>`;
+    $("admin-reports").innerHTML = reportsSnap.docs.map(d=>{const r=d.data();return `<div class="admin-row"><div><b>${escapeHtml(r.reason||"Signalement")}</b><small>${escapeHtml(r.reporterName||"")} · ${escapeHtml(r.productId||"")} · ${r.status||"open"}</small></div><button class="admin-danger" data-close-report="${d.id}">Classer</button></div>`}).join("") || `<div class="empty-mini">Aucun signalement.</div>`;
+    $("admin-users").querySelectorAll("[data-ban]").forEach(b=>b.addEventListener("click",()=>adminToggleBan(b.dataset.ban)));
+    $("admin-products").querySelectorAll("[data-delete-product]").forEach(b=>b.addEventListener("click",()=>adminDeleteProduct(b.dataset.deleteProduct)));
+    $("admin-reports").querySelectorAll("[data-close-report]").forEach(b=>b.addEventListener("click",async()=>{await updateDoc(doc(db,"reports",b.dataset.closeReport),{status:"closed",closedAt:serverTimestamp()});loadAdminData();}));
+  } catch(e) { console.error(e); showToast("Impossible de charger l'administration"); }
 }
+
 
 async function adminToggleBan(uid) {
   const snap = await getDoc(doc(db, "users", uid)); if (!snap.exists()) return;
@@ -1113,6 +1213,7 @@ async function adminSendMessage() {
   const chatId = `admin__${uid}`;
   await setDoc(doc(db, "chats", chatId), { participants:[uid], adminMessage:true, buyerId:uid, sellerId:"ADMIN", buyerName:u.displayName||u.email||"Utilisateur", sellerName:"BOULKA Admin", sellerPhoto:null, productTitle:"Message de l'administration", lastMessage:text, lastMessageAt:serverTimestamp(), lastSenderId:"ADMIN", unreadBy:[uid] }, { merge:true });
   await addDoc(collection(db, "chats", chatId, "messages"), { senderId:"ADMIN", senderName:"BOULKA Admin", text, type:"admin", readBy:["ADMIN"], createdAt:serverTimestamp() });
+  await addDoc(collection(db,"notifications"), { toUserId:uid, fromUserId:currentUser.uid, fromName:"BOULKA Admin", title:"Message de BOULKA", text, read:false, createdAt:serverTimestamp() });
   $("admin-message-text").value=""; showToast("Message envoyé");
 }
 
@@ -1121,3 +1222,5 @@ $("btn-admin-gate").addEventListener("click", openAdminGate);
 $("btn-admin-back").addEventListener("click", () => { $("admin-panel").style.display="none"; showView("view-app"); switchTab("home"); });
 $("btn-admin-refresh").addEventListener("click", loadAdminData);
 $("btn-admin-send").addEventListener("click", adminSendMessage);
+$("admin-user-search")?.addEventListener("input", loadAdminData);
+$("admin-product-search")?.addEventListener("input", loadAdminData);
