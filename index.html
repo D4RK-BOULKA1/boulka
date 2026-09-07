@@ -92,6 +92,7 @@
         <select id="filter-country"><option value="">Tous les pays</option></select>
         <input type="number" id="filter-price-min" placeholder="Prix min">
         <input type="number" id="filter-price-max" placeholder="Prix max">
+        <select id="filter-sort"><option value="recent">Plus récents</option><option value="priceAsc">Prix croissant</option><option value="priceDesc">Prix décroissant</option><option value="rating">Mieux notés</option></select>
       </div>
       <div class="filter-row">
         <label class="filter-check"><input type="checkbox" id="filter-top-rated"> Vendeurs 5★ uniquement</label>
@@ -111,20 +112,7 @@
         <div class="tile" data-cat="High-tech"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span>High-tech</span></div>
         <div class="tile" data-cat="Mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 4l3 2 3-2 4 3-2 3h-2v10H8V10H6L4 7z"/></svg><span>Mode</span></div>
       </div>
-      <!-- ============ PUBLICITÉ GOOGLE ADSENSE ============ -->
-      <script async
-        src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8805798758463791"
-        crossorigin="anonymous"></script>
-      <div class="ad-container">
-        <ins class="adsbygoogle"
-             style="display:block"
-             data-ad-client="ca-pub-8805798758463791"
-             data-ad-slot="5900930991"
-             data-ad-format="auto"
-             data-full-width-responsive="true"></ins>
-      </div>
-      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-      <!-- ============ FIN PUBLICITÉ ============ -->
+      <!-- Publicité désactivée : AdSense peut être initialisé uniquement quand la vue est visible. -->
       <div class="content-header">
         <h2>Nouveautés</h2>
         <span class="result-count" id="result-count"></span>
@@ -154,6 +142,8 @@
 
     <div class="content">
       <div class="rating-summary" id="profile-rating"></div>
+      <div class="seller-dashboard" id="seller-dashboard"></div>
+      <button class="btn-secondary" id="btn-open-favorites">♥ Mes favoris</button>
 
       <div class="settings-card" id="whatsapp-banner" style="display:none">
         <h3>Numéro WhatsApp requis</h3>
@@ -194,8 +184,16 @@
 
   <div id="tab-notif" style="display:none">
     <div class="content">
-      <div class="content-header"><h2>Messages</h2></div>
+      <div class="content-header"><h2>Messages & activité</h2></div>
+      <div id="activity-summary"></div>
+      <div id="notification-list"></div>
       <div id="thread-list"></div>
+    </div>
+  </div>
+  <div id="tab-favorites" style="display:none">
+    <div class="content">
+      <div class="content-header"><h2>Mes favoris</h2></div>
+      <div id="favorites-grid"></div>
     </div>
   </div>
 
@@ -219,6 +217,7 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
     Messages
     <span class="badge-dot" id="unread-dot" style="display:none"></span>
+    <span class="badge-dot" id="notification-dot" style="display:none"></span>
   </button>
   <button id="btn-nav-sell">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.6 12.6L12 21l-8-8L12.4 4H20a2 2 0 0 1 2 2v6.6z"/><circle cx="16" cy="8" r="1.2"/></svg>
@@ -248,6 +247,8 @@
     <div class="detail-cat" id="detail-cat"></div>
     <h1 class="detail-title" id="detail-title"></h1>
     <div class="detail-price" id="detail-price"></div>
+    <div class="detail-tools"><span class="detail-status" id="detail-status">Disponible</span><button class="favorite-detail" id="detail-favorite-btn">♡</button></div>
+    <div class="detail-status-wrap" id="detail-status-wrap"><label>Statut</label><select id="detail-status-select"><option value="available">Disponible</option><option value="reserved">Réservé</option><option value="sold">Vendu</option></select></div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       <span class="own-badge" style="background:var(--surf-2);color:var(--soft);border:0.5px solid var(--line)" id="detail-condition"></span>
       <span class="own-badge" style="background:var(--surf-2);color:var(--soft);border:0.5px solid var(--line)" id="detail-shipping"></span>
@@ -266,6 +267,7 @@
         WhatsApp
       </a>
     </div>
+    <button class="btn-report" id="btn-report-product" style="display:none">⚑ Signaler cette annonce</button>
     <div class="detail-actions" id="detail-buy-actions">
       <button class="btn-outline" id="btn-open-chat">Discuter</button>
       <button class="btn-primary" id="btn-buy-now">Acheter</button>
@@ -429,16 +431,18 @@
     <div class="admin-hero"><div><span class="admin-kicker">Centre de contrôle</span><h1>Administration BOULKA</h1><p>Modération, utilisateurs et communication.</p></div><div class="admin-lock">SECURE</div></div>
     <div class="admin-stats" id="admin-stats"></div>
     <div class="admin-grid">
-      <section class="admin-card"><div class="admin-card-head"><h2>Utilisateurs</h2><span>Modération</span></div><div id="admin-users"></div></section>
-      <section class="admin-card"><div class="admin-card-head"><h2>Annonces</h2><span>Contenu</span></div><div id="admin-products"></div></section>
+      <section class="admin-card"><div class="admin-card-head"><h2>Utilisateurs</h2><span>Modération</span></div><input class="admin-search" id="admin-user-search" placeholder="Rechercher un utilisateur…"><div id="admin-users"></div></section>
+      <section class="admin-card"><div class="admin-card-head"><h2>Annonces</h2><span>Contenu</span></div><input class="admin-search" id="admin-product-search" placeholder="Rechercher une annonce…"><div id="admin-products"></div></section>
+      <section class="admin-card"><div class="admin-card-head"><h2>Signalements</h2><span>Sécurité</span></div><div id="admin-reports"></div></section>
       <section class="admin-card admin-message-card"><div class="admin-card-head"><h2>Message officiel</h2><span>BOULKA Admin</span></div><input id="admin-message-user" placeholder="UID de l'utilisateur"><textarea id="admin-message-text" maxlength="500" placeholder="Écris ton message..."></textarea><button class="btn-primary" id="btn-admin-send">Envoyer le message</button></section>
     </div>
   </div>
   <div class="admin-gate" id="admin-gate"><div class="admin-gate-icon">⌘</div><h2>Zone administration</h2><p>Accès réservé à la modération BOULKA.</p><button class="btn-primary" id="btn-admin-gate">Entrer dans l'espace admin</button></div>
 </div>
 
+<div class="photo-lightbox" id="photo-lightbox"><button id="photo-lightbox-close" aria-label="Fermer">×</button><img id="photo-lightbox-img" alt="Photo agrandie"></div>
 <div class="toast" id="toast"></div>
 
 <script type="module" src="app.js"></script>
 </body>
-</html> 
+</html>
