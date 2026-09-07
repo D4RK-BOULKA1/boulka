@@ -1194,34 +1194,70 @@ function openAdminGate() {
   loadAdminData();
 }
 
+// Charge chaque collection séparément avec Promise.allSettled : si une seule
+// collection est refusée par les règles Firestore, les 3 autres s'affichent
+// quand même, et on voit précisément laquelle pose problème (au lieu qu'un
+// seul refus fasse échouer tout le panneau, comme avec Promise.all).
+async function loadOneAdminCollection(name) {
+  try {
+    const snap = await getDocs(collection(db, name));
+    return { ok: true, snap };
+  } catch (e) {
+    console.error(`Lecture de la collection "${name}" refusée :`, e);
+    return { ok: false, error: e };
+  }
+}
+
+function deniedBlockHtml(collectionName) {
+  return `<div class="empty-mini">⚠ Lecture de "${collectionName}" refusée par Firestore (permission-denied). Le champ isAdmin est correct mais la règle de cette collection bloque quand même — vérifie la règle exacte de "${collectionName}" dans firestore.rules / la console.</div>`;
+}
+
 async function loadAdminData() {
   if (!isAdminSession) return;
-  try {
-    const [usersSnap, productsSnap, reportsSnap, chatsSnap] = await Promise.all([getDocs(collection(db,"users")),getDocs(collection(db,"products")),getDocs(collection(db,"reports")),getDocs(collection(db,"chats"))]);
-    $("admin-stats").innerHTML = `<div><b>${usersSnap.size}</b><span>Utilisateurs</span></div><div><b>${productsSnap.size}</b><span>Annonces</span></div><div><b>${chatsSnap.size}</b><span>Conversations</span></div><div><b>${reportsSnap.size}</b><span>Signalements</span></div>`;
-    const us=($("admin-user-search")?.value||"").toLowerCase();
-    const ps=($("admin-product-search")?.value||"").toLowerCase();
-    const users=usersSnap.docs.filter(d=>{const u=d.data();return !us || `${u.displayName||""} ${u.email||""}`.toLowerCase().includes(us)});
-    const products=productsSnap.docs.filter(d=>{const p=d.data();return !ps || `${p.title||""} ${p.sellerName||""}`.toLowerCase().includes(ps)});
+  const [usersRes, productsRes, reportsRes, chatsRes] = await Promise.all([
+    loadOneAdminCollection("users"),
+    loadOneAdminCollection("products"),
+    loadOneAdminCollection("reports"),
+    loadOneAdminCollection("chats")
+  ]);
+
+  $("admin-stats").innerHTML = `<div><b>${usersRes.ok ? usersRes.snap.size : "?"}</b><span>Utilisateurs</span></div><div><b>${productsRes.ok ? productsRes.snap.size : "?"}</b><span>Annonces</span></div><div><b>${chatsRes.ok ? chatsRes.snap.size : "?"}</b><span>Conversations</span></div><div><b>${reportsRes.ok ? reportsRes.snap.size : "?"}</b><span>Signalements</span></div>`;
+
+  const us = ($("admin-user-search")?.value || "").toLowerCase();
+  const ps = ($("admin-product-search")?.value || "").toLowerCase();
+
+  if (usersRes.ok) {
+    const users = usersRes.snap.docs.filter(d=>{const u=d.data();return !us || `${u.displayName||""} ${u.email||""}`.toLowerCase().includes(us)});
     $("admin-users").innerHTML = users.map(d=>{const u=d.data();return `<div class="admin-row"><div><b>${escapeHtml(u.displayName||u.email||"Utilisateur")}</b><small>${escapeHtml(u.email||"")} · ${u.banned?"Banni":(u.online?"En ligne":"Hors ligne")}</small></div><button class="admin-danger" data-ban="${d.id}">${u.banned?"Débannir":"Bannir"}</button></div>`}).join("") || `<div class="empty-mini">Aucun utilisateur.</div>`;
-    $("admin-products").innerHTML = products.map(d=>{const p=d.data();return `<div class="admin-row"><div><b>${escapeHtml(p.title||"Annonce")}</b><small>${escapeHtml(p.sellerName||"")} · ${formatPrice(p.price)} · ${p.status||"available"}</small></div><button class="admin-danger" data-delete-product="${d.id}">Supprimer</button></div>`}).join("") || `<div class="empty-mini">Aucune annonce.</div>`;
-    $("admin-reports").innerHTML = reportsSnap.docs.map(d=>{const r=d.data();return `<div class="admin-row"><div><b>${escapeHtml(r.reason||"Signalement")}</b><small>${escapeHtml(r.reporterName||"")} · ${escapeHtml(r.productId||"")} · ${r.status||"open"}</small></div><button class="admin-danger" data-close-report="${d.id}">Classer</button></div>`}).join("") || `<div class="empty-mini">Aucun signalement.</div>`;
     $("admin-users").querySelectorAll("[data-ban]").forEach(b=>b.addEventListener("click",()=>adminToggleBan(b.dataset.ban)));
+  } else {
+    $("admin-users").innerHTML = deniedBlockHtml("users");
+  }
+
+  if (productsRes.ok) {
+    const products = productsRes.snap.docs.filter(d=>{const p=d.data();return !ps || `${p.title||""} ${p.sellerName||""}`.toLowerCase().includes(ps)});
+    $("admin-products").innerHTML = products.map(d=>{const p=d.data();return `<div class="admin-row"><div><b>${escapeHtml(p.title||"Annonce")}</b><small>${escapeHtml(p.sellerName||"")} · ${formatPrice(p.price)} · ${p.status||"available"}</small></div><button class="admin-danger" data-delete-product="${d.id}">Supprimer</button></div>`}).join("") || `<div class="empty-mini">Aucune annonce.</div>`;
     $("admin-products").querySelectorAll("[data-delete-product]").forEach(b=>b.addEventListener("click",()=>adminDeleteProduct(b.dataset.deleteProduct)));
+  } else {
+    $("admin-products").innerHTML = deniedBlockHtml("products");
+  }
+
+  if (reportsRes.ok) {
+    $("admin-reports").innerHTML = reportsRes.snap.docs.map(d=>{const r=d.data();return `<div class="admin-row"><div><b>${escapeHtml(r.reason||"Signalement")}</b><small>${escapeHtml(r.reporterName||"")} · ${escapeHtml(r.productId||"")} · ${r.status||"open"}</small></div><button class="admin-danger" data-close-report="${d.id}">Classer</button></div>`}).join("") || `<div class="empty-mini">Aucun signalement.</div>`;
     $("admin-reports").querySelectorAll("[data-close-report]").forEach(b=>b.addEventListener("click",async()=>{
       try {
         await updateDoc(doc(db,"reports",b.dataset.closeReport),{status:"closed",closedAt:serverTimestamp()});
         loadAdminData();
       } catch(e) { console.error(e); showToast("Action refusée par Firestore (vérifie isAdmin sur ton compte)"); }
     }));
-  } catch(e) {
-    console.error(e);
-    $("admin-stats").innerHTML = "";
-    const deniedMsg = `<div class="empty-mini">Accès refusé par Firestore. Vérifie que ton compte a bien le champ isAdmin = true dans la collection "users" (Firebase Console).</div>`;
-    $("admin-users").innerHTML = deniedMsg;
-    $("admin-products").innerHTML = "";
-    $("admin-reports").innerHTML = "";
+  } else {
+    $("admin-reports").innerHTML = deniedBlockHtml("reports");
+  }
+
+  if (!usersRes.ok && !productsRes.ok && !reportsRes.ok && !chatsRes.ok) {
     showToast("Impossible de charger l'administration — droits insuffisants");
+  } else if (!chatsRes.ok || !reportsRes.ok) {
+    showToast("Certaines données admin sont refusées par Firestore — regarde les messages ⚠ dans le panneau");
   }
 }
 
