@@ -21,6 +21,7 @@ const SHIPPING_LABEL = { both: "Main propre ou envoi", hand: "Main propre unique
 const COUNTRIES = ["France", "Belgique", "Mali", "Côte d'Ivoire", "Sénégal", "Cameroun", "Suisse", "Canada", "Autre"];
 const EUR_TO_XOF = 655.957;
 const MAX_PHOTOS = 5;
+const NOTIF_ICON = "icons/icon-192.png";
 
 let currentUser = null;
 let currentUserProfile = null;
@@ -50,6 +51,12 @@ let currentFavoritesOnly = false;
 let userFavoritesIndex = {};
 const ADMIN_CODE = "Boulka_2010";
 
+// Anti-spam : on ignore les toutes premières données reçues de chaque
+// écouteur temps réel pour ne pas déclencher une rafale de notifications
+// au moment de la connexion (elles existaient déjà avant).
+let notifThreadsFirstLoad = true;
+let notifListFirstLoad = true;
+
 const $ = (id) => document.getElementById(id);
 const escapeHtml = (s) => (s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const initials = (name) => (name || "?").trim().split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase();
@@ -75,6 +82,77 @@ function populateCountrySelects() {
   $("filter-country").innerHTML = `<option value="">Tous les pays</option>` + opts;
 }
 populateCountrySelects();
+
+// ---------------- SERVICE WORKER (installation sur écran d'accueil) ----------------
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
+
+// ---------------- NOTIFICATIONS PUSH (navigateur) ----------------
+
+function notifSupported() { return "Notification" in window; }
+
+function updateNotifStatusUI() {
+  const btn = $("btn-enable-notif");
+  const text = $("notif-status-text");
+  if (!btn || !text) return;
+  if (!notifSupported()) {
+    text.innerHTML = "Statut : <b>non supporté sur cet appareil</b>";
+    btn.style.display = "none";
+    return;
+  }
+  const perm = Notification.permission;
+  if (perm === "granted") {
+    text.innerHTML = "Statut : <b>activées</b> ✅";
+    btn.textContent = "Notifications activées";
+    btn.disabled = true;
+  } else if (perm === "denied") {
+    text.innerHTML = "Statut : <b>bloquées</b> — autorise-les dans les réglages de ton navigateur";
+    btn.textContent = "Bloquées par le navigateur";
+    btn.disabled = true;
+  } else {
+    text.innerHTML = "Statut : <b>désactivées</b>";
+    btn.textContent = "Activer les notifications";
+    btn.disabled = false;
+  }
+}
+
+async function requestNotifPermission(showFeedback) {
+  if (!notifSupported()) { if (showFeedback) showToast("Les notifications ne sont pas supportées sur cet appareil"); return; }
+  try {
+    const perm = await Notification.requestPermission();
+    updateNotifStatusUI();
+    if (showFeedback) {
+      if (perm === "granted") showToast("Notifications activées 🔔");
+      else if (perm === "denied") showToast("Notifications refusées");
+    }
+  } catch (e) { console.error(e); }
+}
+
+$("btn-enable-notif")?.addEventListener("click", () => requestNotifPermission(true));
+
+// Affiche une notification navigateur (dès qu'un message, une offre ou une vente arrive),
+// y compris quand l'onglet est en arrière-plan.
+function browserNotify(title, body, opts = {}) {
+  if (!notifSupported() || Notification.permission !== "granted") return;
+  if (document.visibilityState === "visible" && !opts.evenIfVisible) return;
+  try {
+    const n = new Notification(title, {
+      body: body || "",
+      icon: NOTIF_ICON,
+      badge: NOTIF_ICON,
+      tag: opts.tag || undefined
+    });
+    n.onclick = () => {
+      window.focus();
+      if (opts.onClick) opts.onClick();
+      n.close();
+    };
+  } catch (e) { console.warn("Notification impossible :", e); }
+}
 
 // ---------------- PRESENCE ----------------
 
@@ -255,6 +333,9 @@ onAuthStateChanged(auth, async (user) => {
     renderAvatar(user);
     showView("view-app");
     switchTab("home");
+    notifThreadsFirstLoad = true;
+    notifListFirstLoad = true;
+    updateNotifStatusUI();
     listenProducts();
     listenNotifications();
     listenThreads();
@@ -284,6 +365,7 @@ function fillSettingsForm() {
   $("settings-whatsapp-2").value = currentUserProfile.whatsapp || "";
   $("whatsapp-banner").style.display = currentUserProfile.whatsapp ? "none" : "block";
   $("profile-code").textContent = (currentUserProfile.userCode ? ("ID : " + currentUserProfile.userCode + " · ") : "") + "UID : " + (currentUser?.uid || "?");
+  updateNotifStatusUI();
 }
 
 async function saveSettings(whatsappOnly) {
@@ -754,6 +836,7 @@ $("checkout-form").addEventListener("submit", async (e) => {
       text: orderText, type: "order", createdAt: serverTimestamp()
     });
     await updateDoc(doc(db, "chats", chatId), { lastMessage: "Demande d'achat envoyée", lastMessageAt: serverTimestamp(), lastSenderId: currentUser.uid });
+    await createNotification(p.sellerId, "Nouvelle vente 💶", `${firstName} ${lastName} souhaite acheter « ${p.title} » au prix de ${formatPrice(p.price)}.`);
     showToast("Ta demande a été envoyée au vendeur");
     openChat(chatId);
   } catch (err) {
@@ -778,7 +861,7 @@ function listenOffers(productId, product) {
   });
 }
 
-// ---------------- NOTIFICATIONS ----------------
+// ---------------- NOTIFICATIONS (Firestore + notif navigateur) ----------------
 async function createNotification(toUserId, title, text) {
   if (!toUserId || !currentUser || toUserId === currentUser.uid) return;
   try { await addDoc(collection(db,"notifications"), { toUserId, fromUserId:currentUser.uid, fromName:currentUser.displayName||currentUser.email||"Utilisateur", title, text, read:false, createdAt:serverTimestamp() }); } catch(e){ console.warn("Notification non créée", e); }
@@ -788,6 +871,15 @@ async function listenNotifications() {
   if (!currentUser) return;
   const q = query(collection(db,"notifications"), where("toUserId","==",currentUser.uid), limit(30));
   onSnapshot(q, snap => {
+    if (!notifListFirstLoad) {
+      snap.docChanges().forEach(change => {
+        if (change.type === "added") {
+          const n = change.doc.data();
+          browserNotify(n.title || "BOULKA", n.text || "", { tag: "boulka-notif-" + change.doc.id });
+        }
+      });
+    }
+    notifListFirstLoad = false;
     const wrap=$("notification-list"); if(!wrap) return;
     const rows=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
     wrap.innerHTML=rows.length ? rows.map(n=>`<div class="activity-card ${n.read?"":"unread"}"><div class="activity-icon">${n.title?.includes("offre")?"💶":"🔔"}</div><div><b>${escapeHtml(n.title||"Notification")}</b><p>${escapeHtml(n.text||"")}</p><small>${n.createdAt?.toDate?n.createdAt.toDate().toLocaleString("fr-FR"):"À l'instant"}</small></div></div>`).join("") : `<div class="empty-mini">Aucune notification pour le moment.</div>`;
@@ -1015,6 +1107,27 @@ function listenThreads() {
   const q = query(collection(db, "chats"), where("participants", "array-contains", currentUser.uid), orderBy("lastMessageAt", "desc"));
   unsubNotif = onSnapshot(q, (snap) => {
     const threads = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Notification navigateur pour tout nouveau message reçu (hors 1ère synchro au chargement).
+    if (!notifThreadsFirstLoad) {
+      snap.docChanges().forEach(change => {
+        if (change.type === "added" || change.type === "modified") {
+          const t = change.doc.data();
+          if (t.lastSenderId && t.lastSenderId !== currentUser.uid && t.lastSenderId !== "ADMIN") {
+            const isBuyer = currentUser.uid === t.buyerId;
+            const otherName = isBuyer ? t.sellerName : t.buyerName;
+            browserNotify(`💬 Nouveau message de ${otherName || "un utilisateur"}`, t.lastMessage || "", {
+              tag: "boulka-chat-" + change.doc.id,
+              onClick: () => openChat(change.doc.id)
+            });
+          } else if (t.lastSenderId === "ADMIN") {
+            browserNotify("📣 Message de BOULKA", t.lastMessage || "", { tag: "boulka-chat-" + change.doc.id, onClick: () => openChat(change.doc.id) });
+          }
+        }
+      });
+    }
+    notifThreadsFirstLoad = false;
+
     const wrap = $("thread-list");
     if (!threads.length) { wrap.innerHTML = `<p style="font-size:13px;color:var(--mut)">Aucun message pour l'instant. Contacte un vendeur depuis une annonce !</p>`; $("unread-dot").style.display = "none"; return; }
     const hasUnread = threads.some(t => (t.unreadBy || []).includes(currentUser.uid));
@@ -1159,7 +1272,7 @@ function switchTab(tab) {
   showView("view-app");
   if (tab === "account") { currentFavoritesOnly=false; renderProfileListings(); fillSettingsForm(); }
   if (tab === "favorites") { currentFavoritesOnly=true; renderFavorites(); }
-  if (tab === "notif") { currentFavoritesOnly=false; renderThreads(); renderActivity(); }
+  if (tab === "notif") { currentFavoritesOnly=false; renderActivity(); }
 }
 document.querySelectorAll(".bottom-nav button[data-tab]").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
 
