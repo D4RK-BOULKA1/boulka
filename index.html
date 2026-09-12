@@ -4,19 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>BOULKA — Achète et vends d'occasion</title>
+
+<!-- Logo / icônes du site (favicon + icône "Ajouter à l'écran d'accueil") -->
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0A1830">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Boulka">
+
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div id="loading-screen">
-  <div class="brand">B<b>oulka</b></div>
+  <div class="brand brand-logo"><img src="icons/logo-header.png" alt="Boulka" width="56" height="56">oulka</div>
   <div class="spinner"></div>
 </div>
 
 <!-- ============ AUTH VIEW ============ -->
 <div class="view" id="view-auth">
   <div class="auth-card">
-    <div class="brand">B<b>oulka</b></div>
+    <div class="brand brand-logo"><img src="icons/logo-header.png" alt="Boulka" width="44" height="44">oulka</div>
     <p class="auth-tagline">Achète et vends des articles d'occasion</p>
     <div class="auth-error" id="auth-error"></div>
     <button class="btn-google" id="btn-google">
@@ -73,7 +84,7 @@
 <div class="view" id="view-app">
   <div class="topbar">
     <div class="topbar-row">
-      <div class="brand">B<b>oulka</b></div>
+      <div class="brand brand-logo"><img src="icons/logo-header.png" alt="Boulka" width="32" height="32">oulka</div>
       <div class="search-box">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" id="search-input" placeholder="Rechercher sur BOULKA">
@@ -154,6 +165,15 @@
       </div>
 
       <div class="settings-card">
+        <h3>🔔 Notifications</h3>
+        <p>Reçois une notification dès qu'un acheteur t'écrit, fait une offre, ou qu'une vente est conclue — même quand BOULKA est fermé.</p>
+        <div class="notif-status-row">
+          <span class="notif-status-text" id="notif-status-text">Statut : <b>désactivées</b></span>
+          <button class="btn-primary" style="width:auto;margin-top:0" id="btn-enable-notif">Activer les notifications</button>
+        </div>
+      </div>
+
+      <div class="settings-card">
         <h3>Paramètres du compte</h3>
         <div class="field-row">
           <div class="field">
@@ -230,7 +250,7 @@
     <button class="back-btn" id="btn-back-detail">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
-    <div class="brand">B<b>oulka</b></div>
+    <div class="brand brand-logo"><img src="icons/logo-header.png" alt="Boulka" width="28" height="28">oulka</div>
     <button class="back-btn" id="btn-delete-product" style="display:none;margin-left:auto;background:rgba(196,51,90,.2)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
     </button>
@@ -301,7 +321,7 @@
     <button class="back-btn" id="btn-back-sell">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
-    <div class="brand">B<b>oulka</b></div>
+    <div class="brand brand-logo"><img src="icons/logo-header.png" alt="Boulka" width="28" height="28">oulka</div>
   </div>
   <div class="sell-body">
     <h2 style="margin-bottom:16px">Publier un article</h2>
@@ -357,7 +377,7 @@
     <button class="back-btn" id="btn-back-checkout">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
-    <div class="brand">B<b>oulka</b></div>
+    <div class="brand brand-logo"><img src="icons/logo-header.png" alt="Boulka" width="28" height="28">oulka</div>
   </div>
   <div class="sell-body">
     <div class="checkout-product">
@@ -423,7 +443,7 @@
 <div class="view" id="view-admin">
   <div class="detail-header">
     <button class="back-btn" id="btn-admin-back">‹</button>
-    <div class="brand">B<b>oulka</b> <span class="admin-chip">ADMIN</span></div>
+    <div class="brand brand-logo"><img src="icons/logo-header.png" alt="Boulka" width="26" height="26">oulka <span class="admin-chip">ADMIN</span></div>
     <button class="admin-refresh" id="btn-admin-refresh">↻</button>
   </div>
   <div class="admin-shell" id="admin-panel" style="display:none">
