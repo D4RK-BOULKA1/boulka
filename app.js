@@ -1317,7 +1317,7 @@ async function listenNotifications() {
   }, ()=>{});
 }
 
-// ---------------- CHAT (acheteur / vendeur) ----------------
+// ---------------- CHAT (client/ vendeur) ----------------
 
 function chatIdFor(productId, buyerId) { return `${productId}__${buyerId}`; }
 
