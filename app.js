@@ -26,7 +26,7 @@ const NOTIF_ICON = "icons/icon-192.png";
 let currentUser = null;
 let currentUserProfile = null;
 let allProducts = [];
-let allReviews = []; // toutes les reviews (pour calcul des moyennes vendeurs)
+let allReviews = [];
 let activeCategory = "Tout";
 let searchTerm = "";
 let currentProductId = null;
@@ -36,11 +36,11 @@ let currentChatMeta = null;
 let reviewStarValue = 0;
 let unsubProducts = null;
 let unsubOffers = null;
-let unsubNotif = null; // threads
+let unsubNotif = null;
 let unsubReviews = null;
 let unsubChatMessages = null;
 let unsubAllReviews = null;
-let pendingPhotos = []; // dataURLs, max 5
+let pendingPhotos = [];
 let checkoutProduct = null;
 let authMode = "signin";
 let theme = "light";
@@ -51,9 +51,6 @@ let currentFavoritesOnly = false;
 let userFavoritesIndex = {};
 const ADMIN_CODE = "Boulka_2010";
 
-// Anti-spam : on ignore les toutes premières données reçues de chaque
-// écouteur temps réel pour ne pas déclencher une rafale de notifications
-// au moment de la connexion (elles existaient déjà avant).
 let notifThreadsFirstLoad = true;
 let notifListFirstLoad = true;
 
@@ -67,13 +64,22 @@ function showToast(msg) {
   t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 2200);
 }
+
 function showView(id) {
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   $(id).classList.add("active");
   $("bottom-nav").style.display = (id === "view-app") ? "flex" : "none";
 }
-function showAuthError(msg) { const el = $("auth-error"); el.textContent = msg; el.classList.add("show"); }
-function clearAuthError() { $("auth-error").classList.remove("show"); }
+
+function showAuthError(msg) {
+  const el = $("auth-error");
+  el.textContent = msg;
+  el.classList.add("show");
+}
+
+function clearAuthError() {
+  $("auth-error").classList.remove("show");
+}
 
 function populateCountrySelects() {
   const opts = COUNTRIES.map(c => `<option value="${c}">${c}</option>`).join("");
@@ -81,9 +87,8 @@ function populateCountrySelects() {
   $("settings-country").innerHTML = opts;
   $("filter-country").innerHTML = `<option value="">Tous les pays</option>` + opts;
 }
-populateCountrySelects();
 
-// ---------------- SERVICE WORKER (installation sur écran d'accueil) ----------------
+populateCountrySelects();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -91,20 +96,23 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-// ---------------- NOTIFICATIONS PUSH (navigateur) ----------------
-
-function notifSupported() { return "Notification" in window; }
+function notifSupported() {
+  return "Notification" in window;
+}
 
 function updateNotifStatusUI() {
   const btn = $("btn-enable-notif");
   const text = $("notif-status-text");
   if (!btn || !text) return;
+
   if (!notifSupported()) {
     text.innerHTML = "Statut : <b>non supporté sur cet appareil</b>";
     btn.style.display = "none";
     return;
   }
+
   const perm = Notification.permission;
+
   if (perm === "granted") {
     text.innerHTML = "Statut : <b>activées</b> ✅";
     btn.textContent = "Notifications activées";
@@ -121,24 +129,30 @@ function updateNotifStatusUI() {
 }
 
 async function requestNotifPermission(showFeedback) {
-  if (!notifSupported()) { if (showFeedback) showToast("Les notifications ne sont pas supportées sur cet appareil"); return; }
+  if (!notifSupported()) {
+    if (showFeedback) showToast("Les notifications ne sont pas supportées sur cet appareil");
+    return;
+  }
+
   try {
     const perm = await Notification.requestPermission();
     updateNotifStatusUI();
+
     if (showFeedback) {
       if (perm === "granted") showToast("Notifications activées 🔔");
       else if (perm === "denied") showToast("Notifications refusées");
     }
-  } catch (e) { console.error(e); }
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 $("btn-enable-notif")?.addEventListener("click", () => requestNotifPermission(true));
 
-// Affiche une notification navigateur (dès qu'un message, une offre ou une vente arrive),
-// y compris quand l'onglet est en arrière-plan.
 function browserNotify(title, body, opts = {}) {
   if (!notifSupported() || Notification.permission !== "granted") return;
   if (document.visibilityState === "visible" && !opts.evenIfVisible) return;
+
   try {
     const n = new Notification(title, {
       body: body || "",
@@ -146,61 +160,84 @@ function browserNotify(title, body, opts = {}) {
       badge: NOTIF_ICON,
       tag: opts.tag || undefined
     });
+
     n.onclick = () => {
       window.focus();
       if (opts.onClick) opts.onClick();
       n.close();
     };
-  } catch (e) { console.warn("Notification impossible :", e); }
+  } catch (e) {
+    console.warn("Notification impossible :", e);
+  }
 }
-
-// ---------------- PRESENCE ----------------
 
 function setPresence(online) {
   if (!currentUser) return;
-  updateDoc(doc(db, "users", currentUser.uid), { online, lastSeen: serverTimestamp() }).catch(() => {});
+  updateDoc(
+    doc(db, "users", currentUser.uid),
+    { online, lastSeen: serverTimestamp() }
+  ).catch(() => {});
 }
 
-document.addEventListener("visibilitychange", () => setPresence(document.visibilityState === "visible"));
+document.addEventListener("visibilitychange", () =>
+  setPresence(document.visibilityState === "visible")
+);
+
 window.addEventListener("beforeunload", () => setPresence(false));
 
 function presenceLabel(data) {
-  if (data?.online) return '<span class="presence-dot online"></span>En ligne';
+  if (data?.online)
+    return '<span class="presence-dot online"></span>En ligne';
+
   if (data?.lastSeen?.toDate) {
     const d = data.lastSeen.toDate();
-    return `<span class="presence-dot offline"></span>Vu ${d.toLocaleDateString("fr-FR", {day:"2-digit", month:"2-digit"})} à ${d.toLocaleTimeString("fr-FR", {hour:"2-digit", minute:"2-digit"})}`;
+    return `<span class="presence-dot offline"></span>Vu ${d.toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit"
+    })} à ${d.toLocaleTimeString("fr-FR", {
+      hour: "2-digit",
+      minute: "2-digit"
+    })}`;
   }
+
   return '<span class="presence-dot offline"></span>Hors ligne';
 }
 
-// ---------------- CURRENCY ----------------
+function prefCurrency() {
+  return currentUserProfile?.currency || "EUR";
+}
 
-function prefCurrency() { return currentUserProfile?.currency || "EUR"; }
 function formatPrice(priceEUR) {
   const n = Number(priceEUR) || 0;
+
   if (prefCurrency() === "XOF") {
     return Math.round(n * EUR_TO_XOF).toLocaleString("fr-FR") + " FCFA";
   }
+
   return n.toFixed(2) + " €";
 }
-
-// ---------------- THEME ----------------
 
 $("btn-theme-toggle").addEventListener("click", () => {
   theme = theme === "light" ? "dark" : "light";
   document.documentElement.setAttribute("data-theme", theme);
-  $("theme-icon-path").setAttribute("d", theme === "light"
-    ? "M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"
-    : "M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z");
+
+  $("theme-icon-path").setAttribute(
+    "d",
+    theme === "light"
+      ? "M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"
+      : "M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"
+  );
 });
 
-// ---------------- FILTERS ----------------
+$("btn-filter-toggle").addEventListener("click", () =>
+  $("filter-panel").classList.toggle("show")
+);
 
-$("btn-filter-toggle").addEventListener("click", () => $("filter-panel").classList.toggle("show"));
 $("filter-country").addEventListener("change", renderGrid);
 $("filter-price-min").addEventListener("input", renderGrid);
 $("filter-price-max").addEventListener("input", renderGrid);
 $("filter-top-rated").addEventListener("change", renderGrid);
+
 $("btn-filter-clear").addEventListener("click", () => {
   $("filter-country").value = "";
   $("filter-price-min").value = "";
@@ -209,10 +246,9 @@ $("btn-filter-clear").addEventListener("click", () => {
   renderGrid();
 });
 
-// ---------------- AUTH ----------------
-
 $("btn-google").addEventListener("click", async () => {
   clearAuthError();
+
   try {
     const cred = await signInWithPopup(auth, new GoogleAuthProvider());
     await ensureUserProfile(cred.user, { accountType: "particulier" });
@@ -224,6 +260,7 @@ $("btn-google").addEventListener("click", async () => {
 $("auth-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   clearAuthError();
+
   const email = $("auth-email").value.trim();
   const password = $("auth-password").value;
   const name = $("auth-name").value.trim();
@@ -232,7 +269,9 @@ $("auth-form").addEventListener("submit", async (e) => {
   const companyName = $("auth-company-name").value.trim();
   const siret = $("auth-siret").value.trim();
   const submitBtn = $("auth-submit");
+
   submitBtn.disabled = true;
+
   try {
     if (authMode === "signup") {
       if (accountType === "professionnel" && (!companyName || !siret)) {
@@ -240,10 +279,15 @@ $("auth-form").addEventListener("submit", async (e) => {
         submitBtn.disabled = false;
         return;
       }
+
       const cred = await createUserWithEmailAndPassword(auth, email, password);
-      if (name) await updateProfile(cred.user, { displayName: name });
+
+      if (name)
+        await updateProfile(cred.user, { displayName: name });
+
       await ensureUserProfile(cred.user, {
-        accountType, country,
+        accountType,
+        country,
         companyName: accountType === "professionnel" ? companyName : null,
         siret: accountType === "professionnel" ? siret : null
       });
@@ -253,19 +297,24 @@ $("auth-form").addEventListener("submit", async (e) => {
   } catch (e) {
     showAuthError(friendlyAuthError(e.code));
   }
+
   submitBtn.disabled = false;
 });
 
 function genUserCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let s = "";
-  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+
+  for (let i = 0; i < 6; i++)
+    s += chars[Math.floor(Math.random() * chars.length)];
+
   return "BLK-" + s;
 }
 
 async function ensureUserProfile(user, defaults) {
   const ref = doc(db, "users", user.uid);
   const snap = await getDoc(ref);
+
   if (!snap.exists()) {
     await setDoc(ref, {
       displayName: user.displayName || user.email,
@@ -295,23 +344,36 @@ function friendlyAuthError(code) {
     "auth/popup-closed-by-user": "Connexion Google annulée.",
     "auth/unauthorized-domain": "Ce domaine n'est pas autorisé dans Firebase (Authentication > Settings > Authorized domains)."
   };
+
   return map[code] || "Une erreur est survenue. Réessaie.";
 }
 
 $("auth-switch-btn").addEventListener("click", () => {
   authMode = authMode === "signin" ? "signup" : "signin";
   clearAuthError();
+
   const isSignup = authMode === "signup";
+
   $("field-name").style.display = isSignup ? "block" : "none";
   $("field-name-row2").style.display = isSignup ? "flex" : "none";
-  $("field-pro").style.display = isSignup && $("auth-account-type").value === "professionnel" ? "flex" : "none";
-  $("auth-submit").textContent = isSignup ? "Créer mon compte" : "Se connecter";
-  $("auth-switch-text").textContent = isSignup ? "Déjà un compte ?" : "Pas encore de compte ?";
-  $("auth-switch-btn").textContent = isSignup ? "Se connecter" : "Créer un compte";
+  $("field-pro").style.display =
+    isSignup && $("auth-account-type").value === "professionnel"
+      ? "flex"
+      : "none";
+
+  $("auth-submit").textContent =
+    isSignup ? "Créer mon compte" : "Se connecter";
+
+  $("auth-switch-text").textContent =
+    isSignup ? "Déjà un compte ?" : "Pas encore de compte ?";
+
+  $("auth-switch-btn").textContent =
+    isSignup ? "Se connecter" : "Créer un compte";
 });
 
 $("auth-account-type").addEventListener("change", (e) => {
-  $("field-pro").style.display = e.target.value === "professionnel" ? "flex" : "none";
+  $("field-pro").style.display =
+    e.target.value === "professionnel" ? "flex" : "none";
 });
 
 $("btn-logout").addEventListener("click", () => signOut(auth));
@@ -319,22 +381,34 @@ $("btn-logout").addEventListener("click", () => signOut(auth));
 onAuthStateChanged(auth, async (user) => {
   currentUser = user;
   $("loading-screen").style.display = "none";
+
   if (user) {
     await ensureUserProfile(user, {});
+
     const snap = await getDoc(doc(db, "users", user.uid));
     currentUserProfile = snap.exists() ? snap.data() : null;
+
     if (currentUserProfile?.banned) {
       await signOut(auth);
       alert("Ton compte a été suspendu par BOULKA.");
       return;
     }
+
     isAdminSession = !!currentUserProfile?.isAdmin;
-    await setDoc(doc(db, "users", user.uid), { online: true, lastSeen: serverTimestamp() }, { merge: true });
+
+    await setDoc(
+      doc(db, "users", user.uid),
+      { online: true, lastSeen: serverTimestamp() },
+      { merge: true }
+    );
+
     renderAvatar(user);
     showView("view-app");
     switchTab("home");
+
     notifThreadsFirstLoad = true;
     notifListFirstLoad = true;
+
     updateNotifStatusUI();
     listenProducts();
     listenNotifications();
@@ -345,26 +419,37 @@ onAuthStateChanged(auth, async (user) => {
     if (unsubProducts) unsubProducts();
     if (unsubNotif) unsubNotif();
     if (unsubAllReviews) unsubAllReviews();
+
     showView("view-auth");
   }
 });
 
 function renderAvatar(user) {
   document.querySelectorAll(".js-user-avatar").forEach(n => {
-    if (user.photoURL) n.innerHTML = `<img src="${user.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
-    else n.textContent = initials(user.displayName || user.email);
+    if (user.photoURL) {
+      n.innerHTML = `<img src="${user.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
+    } else {
+      n.textContent = initials(user.displayName || user.email);
+    }
   });
 }
 
-// ---------------- ACCOUNT SETTINGS ----------------
-
 function fillSettingsForm() {
   if (!currentUserProfile) return;
+
   $("settings-country").value = currentUserProfile.country || "France";
   $("settings-currency").value = currentUserProfile.currency || "EUR";
   $("settings-whatsapp-2").value = currentUserProfile.whatsapp || "";
-  $("whatsapp-banner").style.display = currentUserProfile.whatsapp ? "none" : "block";
-  $("profile-code").textContent = (currentUserProfile.userCode ? ("ID : " + currentUserProfile.userCode + " · ") : "") + "UID : " + (currentUser?.uid || "?");
+  $("whatsapp-banner").style.display =
+    currentUserProfile.whatsapp ? "none" : "block";
+
+  $("profile-code").textContent =
+    (currentUserProfile.userCode
+      ? ("ID : " + currentUserProfile.userCode + " · ")
+      : "") +
+    "UID : " +
+    (currentUser?.uid || "?");
+
   updateNotifStatusUI();
 }
 
@@ -372,25 +457,48 @@ async function saveSettings(whatsappOnly) {
   const data = {
     country: $("settings-country").value,
     currency: $("settings-currency").value,
-    whatsapp: (whatsappOnly ? $("settings-whatsapp").value : $("settings-whatsapp-2").value).trim() || null
+    whatsapp: (
+      whatsappOnly
+        ? $("settings-whatsapp").value
+        : $("settings-whatsapp-2").value
+    ).trim() || null
   };
+
   await updateDoc(doc(db, "users", currentUser.uid), data);
-  currentUserProfile = { ...currentUserProfile, ...data };
+
+  currentUserProfile = {
+    ...currentUserProfile,
+    ...data
+  };
+
   fillSettingsForm();
   renderGrid();
   renderProfileListings();
   showToast("Paramètres enregistrés");
 }
-$("btn-save-settings").addEventListener("click", () => saveSettings(false));
-$("btn-save-whatsapp").addEventListener("click", () => saveSettings(true));
 
-// ---------------- PRODUCTS ----------------
+$("btn-save-settings").addEventListener("click", () =>
+  saveSettings(false)
+);
+
+$("btn-save-whatsapp").addEventListener("click", () =>
+  saveSettings(true)
+);
 
 function listenProducts() {
   $("product-grid").innerHTML = skeletonGridHtml(6);
-  const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
+
+  const q = query(
+    collection(db, "products"),
+    orderBy("createdAt", "desc")
+  );
+
   unsubProducts = onSnapshot(q, (snap) => {
-    allProducts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    allProducts = snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+
     renderCategoryChips();
     renderGrid();
     renderProfileListings();
@@ -399,66 +507,175 @@ function listenProducts() {
     console.error(err);
     $("product-grid").innerHTML = "";
     $("empty-state").style.display = "block";
-    $("empty-state").querySelector("h3").textContent = "Impossible de charger les annonces";
-    $("empty-state").querySelector("p").textContent = "Vérifie ta connexion ou réessaie dans un instant.";
+    $("empty-state").querySelector("h3").textContent =
+      "Impossible de charger les annonces";
+    $("empty-state").querySelector("p").textContent =
+      "Vérifie ta connexion ou réessaie dans un instant.";
     showToast("Erreur de chargement — vérifie ta config Firebase");
   });
 }
 
-async function refreshFavoritesIndex() { try { const s=await getDocs(collection(db,"users")); userFavoritesIndex={}; s.docs.forEach(d=>(d.data().favorites||[]).forEach(pid=>userFavoritesIndex[pid]=(userFavoritesIndex[pid]||0)+1)); renderProfileListings(); } catch(e){} }
+async function refreshFavoritesIndex() {
+  try {
+    const s = await getDocs(collection(db, "users"));
+    userFavoritesIndex = {};
+
+    s.docs.forEach(d =>
+      (d.data().favorites || []).forEach(pid =>
+        userFavoritesIndex[pid] =
+          (userFavoritesIndex[pid] || 0) + 1
+      )
+    );
+
+    renderProfileListings();
+  } catch (e) {}
+}
 
 function renderCategoryChips() {
   const row = $("category-row");
   row.innerHTML = "";
+
   ["Tout", ...CATEGORIES].forEach(cat => {
     const btn = document.createElement("button");
-    btn.className = "pill" + (cat === activeCategory ? " active" : "");
+
+    btn.className =
+      "pill" + (cat === activeCategory ? " active" : "");
+
     btn.textContent = cat;
-    btn.addEventListener("click", () => { activeCategory = cat; renderCategoryChips(); renderGrid(); });
+
+    btn.addEventListener("click", () => {
+      activeCategory = cat;
+      renderCategoryChips();
+      renderGrid();
+    });
+
     row.appendChild(btn);
   });
 }
-document.querySelectorAll(".tile[data-cat]").forEach(t => t.addEventListener("click", () => {
-  activeCategory = t.dataset.cat; renderCategoryChips(); renderGrid();
-  window.scrollTo({ top: document.getElementById("product-grid").offsetTop - 100, behavior: "smooth" });
-}));
 
-$("search-input").addEventListener("input", (e) => { searchTerm = e.target.value.toLowerCase(); renderGrid(); });
-$("btn-nav-search").addEventListener("click", () => { switchTab("home"); $("search-input").focus(); });
+document.querySelectorAll(".tile[data-cat]").forEach(t =>
+  t.addEventListener("click", () => {
+    activeCategory = t.dataset.cat;
+    renderCategoryChips();
+    renderGrid();
+
+    window.scrollTo({
+      top: document.getElementById("product-grid").offsetTop - 100,
+      behavior: "smooth"
+    });
+  })
+);
+
+$("search-input").addEventListener("input", (e) => {
+  searchTerm = e.target.value.toLowerCase();
+  renderGrid();
+});
+
+$("btn-nav-search").addEventListener("click", () => {
+  switchTab("home");
+  $("search-input").focus();
+});
 
 function sellerAvg(sellerId) {
   const rows = allReviews.filter(r => r.sellerId === sellerId);
+
   if (rows.length === 0) return null;
-  const avg = rows.reduce((s, r) => s + r.rating, 0) / rows.length;
-  return { avg, count: rows.length };
+
+  const avg =
+    rows.reduce((s, r) => s + r.rating, 0) / rows.length;
+
+  return {
+    avg,
+    count: rows.length
+  };
 }
 
 function renderGrid() {
   let list = allProducts;
-  if (activeCategory !== "Tout") list = list.filter(p => p.category === activeCategory);
-  if (searchTerm) list = list.filter(p => (p.title + " " + p.description).toLowerCase().includes(searchTerm));
+
+  if (activeCategory !== "Tout")
+    list = list.filter(p => p.category === activeCategory);
+
+  if (searchTerm)
+    list = list.filter(p =>
+      (p.title + " " + p.description)
+        .toLowerCase()
+        .includes(searchTerm)
+    );
+
   const country = $("filter-country").value;
-  if (country) list = list.filter(p => p.sellerCountry === country);
+  if (country)
+    list = list.filter(p => p.sellerCountry === country);
+
   const min = parseFloat($("filter-price-min").value);
   const max = parseFloat($("filter-price-max").value);
-  if (!isNaN(min)) list = list.filter(p => Number(p.price) >= min);
-  if (!isNaN(max)) list = list.filter(p => Number(p.price) <= max);
+
+  if (!isNaN(min))
+    list = list.filter(p => Number(p.price) >= min);
+
+  if (!isNaN(max))
+    list = list.filter(p => Number(p.price) <= max);
+
   if ($("filter-top-rated").checked) {
-    list = list.filter(p => { const r = sellerAvg(p.sellerId); return r && r.avg >= 5; });
+    list = list.filter(p => {
+      const r = sellerAvg(p.sellerId);
+      return r && r.avg >= 5;
+    });
   }
-  if (currentFavoritesOnly) list = list.filter(p => (currentUserProfile?.favorites || []).includes(p.id));
-  if (sortMode === "priceAsc") list = [...list].sort((a,b) => Number(a.price)-Number(b.price));
-  if (sortMode === "priceDesc") list = [...list].sort((a,b) => Number(b.price)-Number(a.price));
-  if (sortMode === "rating") list = [...list].sort((a,b) => (sellerAvg(b.sellerId)?.avg||0)-(sellerAvg(a.sellerId)?.avg||0));
-  $("result-count").textContent = list.length + (list.length > 1 ? " articles" : " article");
+
+  if (currentFavoritesOnly)
+    list = list.filter(p =>
+      (currentUserProfile?.favorites || []).includes(p.id)
+    );
+
+  if (sortMode === "priceAsc")
+    list = [...list].sort((a, b) =>
+      Number(a.price) - Number(b.price)
+    );
+
+  if (sortMode === "priceDesc")
+    list = [...list].sort((a, b) =>
+      Number(b.price) - Number(a.price)
+    );
+
+  if (sortMode === "rating")
+    list = [...list].sort(
+      (a, b) =>
+        (sellerAvg(b.sellerId)?.avg || 0) -
+        (sellerAvg(a.sellerId)?.avg || 0)
+    );
+
+  $("result-count").textContent =
+    list.length + (list.length > 1 ? " articles" : " article");
+
   const grid = $("product-grid");
   const empty = $("empty-state");
-  if (list.length === 0) { grid.innerHTML = ""; empty.style.display = "block"; return; }
+
+  if (list.length === 0) {
+    grid.innerHTML = "";
+    empty.style.display = "block";
+    return;
+  }
+
   empty.style.display = "none";
   grid.innerHTML = list.map(productCardHtml).join("");
-  grid.querySelectorAll(".product-card").forEach(card => card.addEventListener("click", () => openProduct(card.dataset.id)));
-  grid.querySelectorAll("[data-favorite]").forEach(btn => btn.addEventListener("click", async e => { e.stopPropagation(); await toggleFavorite(btn.dataset.favorite); }));
-  grid.querySelectorAll("[data-wa]").forEach(a => a.addEventListener("click", e => e.stopPropagation()));
+
+  grid.querySelectorAll(".product-card").forEach(card =>
+    card.addEventListener("click", () =>
+      openProduct(card.dataset.id)
+    )
+  );
+
+  grid.querySelectorAll("[data-favorite]").forEach(btn =>
+    btn.addEventListener("click", async e => {
+      e.stopPropagation();
+      await toggleFavorite(btn.dataset.favorite);
+    })
+  );
+
+  grid.querySelectorAll("[data-wa]").forEach(a =>
+    a.addEventListener("click", e => e.stopPropagation())
+  );
 }
 
 function starsHtml(avg) {
@@ -468,12 +685,28 @@ function starsHtml(avg) {
 
 function productCardHtml(p) {
   const color = THUMB_COLORS[p.category] || "#2A55FF";
-  const photos = p.photos && p.photos.length ? p.photos : (p.photo ? [p.photo] : []);
-  const thumb = photos[0] ? `<img src="${photos[0]}" alt="">` : escapeHtml(p.title);
+  const photos =
+    p.photos && p.photos.length
+      ? p.photos
+      : (p.photo ? [p.photo] : []);
+
+  const thumb = photos[0]
+    ? `<img src="${photos[0]}" alt="">`
+    : escapeHtml(p.title);
+
   const r = sellerAvg(p.sellerId);
-  const isFav = (currentUserProfile?.favorites || []).includes(p.id);
+  const isFav =
+    (currentUserProfile?.favorites || []).includes(p.id);
+
   const status = p.status || "available";
-  const statusLabel = status === "sold" ? "Vendu" : status === "reserved" ? "Réservé" : "Disponible";
+
+  const statusLabel =
+    status === "sold"
+      ? "Vendu"
+      : status === "reserved"
+        ? "Réservé"
+        : "Disponible";
+
   return `
     <div class="product-card" data-id="${p.id}">
       <span class="status-badge status-${status}">${statusLabel}</span>
@@ -492,16 +725,34 @@ function productCardHtml(p) {
 
 async function toggleFavorite(productId) {
   if (!currentUser || !currentUserProfile) return;
+
   const favs = [...(currentUserProfile.favorites || [])];
   const i = favs.indexOf(productId);
-  if (i >= 0) favs.splice(i, 1); else favs.push(productId);
+
+  if (i >= 0)
+    favs.splice(i, 1);
+  else
+    favs.push(productId);
+
   try {
-    await updateDoc(doc(db, "users", currentUser.uid), { favorites: favs });
+    await updateDoc(
+      doc(db, "users", currentUser.uid),
+      { favorites: favs }
+    );
+
     currentUserProfile.favorites = favs;
     renderGrid();
     renderProfileListings();
-    showToast(i >= 0 ? "Retiré des favoris" : "Ajouté aux favoris ♥");
-  } catch(e) { console.error(e); showToast("Impossible de modifier les favoris"); }
+
+    showToast(
+      i >= 0
+        ? "Retiré des favoris"
+        : "Ajouté aux favoris ♥"
+    );
+  } catch (e) {
+    console.error(e);
+    showToast("Impossible de modifier les favoris");
+  }
 }
 
 function skeletonGridHtml(count) {
@@ -513,102 +764,156 @@ function skeletonGridHtml(count) {
     </div>`).join("");
 }
 
-// ---------------- SELL ----------------
-
 $("btn-nav-sell").addEventListener("click", openSellForm);
 $("btn-open-sell-hero").addEventListener("click", openSellForm);
 $("btn-open-sell-2").addEventListener("click", openSellForm);
-$("btn-back-sell").addEventListener("click", () => { showView("view-app"); switchTab("home"); });
+
+$("btn-back-sell").addEventListener("click", () => {
+  showView("view-app");
+  switchTab("home");
+});
 
 function openSellForm() {
   if (!currentUserProfile?.whatsapp) {
-    showToast("Ajoute ton numéro WhatsApp dans Compte avant de publier une annonce");
+    showToast(
+      "Ajoute ton numéro WhatsApp dans Compte avant de publier une annonce"
+    );
     switchTab("account");
     return;
   }
+
   $("sell-form").reset();
   pendingPhotos = [];
   renderPhotoRow();
-  $("sell-category").innerHTML = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
+
+  $("sell-category").innerHTML =
+    CATEGORIES.map(c =>
+      `<option value="${c}">${c}</option>`
+    ).join("");
+
   showView("view-sell");
 }
 
 function renderPhotoRow() {
   const row = $("photo-row");
   let html = "";
+
   pendingPhotos.forEach((src, i) => {
-    html += `<div class="photo-slot"><img src="${src}"><div class="remove-x" data-remove="${i}">✕</div></div>`;
+    html += `
+      <div class="photo-slot">
+        <img src="${src}">
+        <div class="remove-x" data-remove="${i}">✕</div>
+      </div>`;
   });
+
   if (pendingPhotos.length < MAX_PHOTOS) {
     html += `
       <div class="photo-slot">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="22" height="22"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M21 16l-4.5-4.5a2 2 0 0 0-2.8 0L5 21"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="22" height="22">
+          <rect x="3" y="5" width="18" height="14" rx="2"/>
+          <circle cx="9" cy="11" r="2.2"/>
+          <path d="M21 16l-4.5-4.5a2 2 0 0 0-2.8 0L5 21"/>
+        </svg>
         <input type="file" id="photo-input" accept="image/*">
       </div>`;
   }
+
   row.innerHTML = html;
+
   const input = $("photo-input");
+
   if (input) {
     input.addEventListener("change", async (e) => {
       const file = e.target.files[0];
       if (!file) return;
+
       const dataUrl = await compressImage(file);
       pendingPhotos.push(dataUrl);
       renderPhotoRow();
     });
   }
-  row.querySelectorAll("[data-remove]").forEach(x => x.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    pendingPhotos.splice(Number(x.dataset.remove), 1);
-    renderPhotoRow();
-  }));
+
+  row.querySelectorAll("[data-remove]").forEach(x =>
+    x.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      pendingPhotos.splice(Number(x.dataset.remove), 1);
+      renderPhotoRow();
+    })
+  );
 }
 
 function compressImage(file) {
   return new Promise((resolve) => {
     const img = new Image();
     const reader = new FileReader();
-    reader.onload = (e) => { img.src = e.target.result; };
+
+    reader.onload = (e) => {
+      img.src = e.target.result;
+    };
+
     img.onload = () => {
       const maxW = 800;
       const scale = Math.min(1, maxW / img.width);
+
       const canvas = document.createElement("canvas");
       canvas.width = img.width * scale;
       canvas.height = img.height * scale;
-      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      canvas
+        .getContext("2d")
+        .drawImage(img, 0, 0, canvas.width, canvas.height);
+
       resolve(canvas.toDataURL("image/jpeg", 0.72));
     };
+
     reader.readAsDataURL(file);
   });
 }
 
 $("sell-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+
   const title = $("sell-title").value.trim();
   const price = parseFloat($("sell-price").value);
   const category = $("sell-category").value;
   const condition = $("sell-condition").value;
   const shipping = $("sell-shipping").value;
   const description = $("sell-description").value.trim();
-  if (!title || !price || price <= 0) { showToast("Titre et prix requis"); return; }
-  if (pendingPhotos.length === 0) { showToast("Ajoute au moins une photo"); return; }
+
+  if (!title || !price || price <= 0) {
+    showToast("Titre et prix requis");
+    return;
+  }
+
+  if (pendingPhotos.length === 0) {
+    showToast("Ajoute au moins une photo");
+    return;
+  }
 
   const btn = $("sell-submit");
   btn.disabled = true;
   btn.textContent = "Publication...";
+
   try {
     await addDoc(collection(db, "products"), {
-      title, price, category, condition, shipping, description,
+      title,
+      price,
+      category,
+      condition,
+      shipping,
+      description,
       photos: pendingPhotos,
       sellerId: currentUser.uid,
       sellerName: currentUser.displayName || currentUser.email,
       sellerPhoto: currentUser.photoURL || null,
-      sellerIsPro: currentUserProfile?.accountType === "professionnel",
+      sellerIsPro:
+        currentUserProfile?.accountType === "professionnel",
       sellerCountry: currentUserProfile?.country || null,
       sellerWhatsapp: currentUserProfile?.whatsapp || null,
       status: "available",
       createdAt: serverTimestamp()
     });
+
     showView("view-app");
     switchTab("home");
     showToast("Annonce publiée ! Visible par tous les utilisateurs.");
@@ -616,18 +921,27 @@ $("sell-form").addEventListener("submit", async (e) => {
     console.error(err);
     showToast("Erreur lors de la publication");
   }
+
   btn.disabled = false;
   btn.textContent = "Publier l'annonce";
 });
 
-// ---------------- PRODUCT DETAIL ----------------
-
 async function openProduct(id) {
   currentProductId = id;
   currentProductPhotoIndex = 0;
+
   const snap = await getDoc(doc(db, "products", id));
-  if (!snap.exists()) { showToast("Cette annonce n'existe plus"); return; }
-  const p = { id: snap.id, ...snap.data() };
+
+  if (!snap.exists()) {
+    showToast("Cette annonce n'existe plus");
+    return;
+  }
+
+  const p = {
+    id: snap.id,
+    ...snap.data()
+  };
+
   renderProductDetail(p);
   showView("view-detail");
   listenOffers(id, p);
@@ -636,82 +950,194 @@ async function openProduct(id) {
 
 function renderCarousel(photos, color) {
   const track = $("detail-photo-track");
+
   track.innerHTML = photos.length
-    ? photos.map(src => `<div class="slide" style="background:${color}"><img src="${src}"></div>`).join("")
+    ? photos.map(src =>
+        `<div class="slide" style="background:${color}"><img src="${src}"></div>`
+      ).join("")
     : `<div class="slide" style="background:${color}">Pas de photo</div>`;
-  track.style.transform = `translateX(-${currentProductPhotoIndex * 100}%)`;
+
+  track.style.transform =
+    `translateX(-${currentProductPhotoIndex * 100}%)`;
+
   const dots = $("carousel-dots");
-  dots.innerHTML = photos.length > 1 ? photos.map((_, i) => `<span class="${i === currentProductPhotoIndex ? "active" : ""}"></span>`).join("") : "";
-  $("carousel-prev").style.display = photos.length > 1 ? "flex" : "none";
-  $("carousel-next").style.display = photos.length > 1 ? "flex" : "none";
+
+  dots.innerHTML =
+    photos.length > 1
+      ? photos.map((_, i) =>
+          `<span class="${i === currentProductPhotoIndex ? "active" : ""}"></span>`
+        ).join("")
+      : "";
+
+  $("carousel-prev").style.display =
+    photos.length > 1 ? "flex" : "none";
+
+  $("carousel-next").style.display =
+    photos.length > 1 ? "flex" : "none";
 }
+
 $("carousel-prev").addEventListener("click", () => {
   const photos = $("detail-photo-track").children.length;
+
   if (photos < 2) return;
-  currentProductPhotoIndex = (currentProductPhotoIndex - 1 + photos) % photos;
+
+  currentProductPhotoIndex =
+    (currentProductPhotoIndex - 1 + photos) % photos;
+
   updateCarouselPosition();
 });
+
 $("carousel-next").addEventListener("click", () => {
   const photos = $("detail-photo-track").children.length;
+
   if (photos < 2) return;
-  currentProductPhotoIndex = (currentProductPhotoIndex + 1) % photos;
+
+  currentProductPhotoIndex =
+    (currentProductPhotoIndex + 1) % photos;
+
   updateCarouselPosition();
 });
+
 function updateCarouselPosition() {
-  $("detail-photo-track").style.transform = `translateX(-${currentProductPhotoIndex * 100}%)`;
-  $("carousel-dots").querySelectorAll("span").forEach((d, i) => d.classList.toggle("active", i === currentProductPhotoIndex));
+  $("detail-photo-track").style.transform =
+    `translateX(-${currentProductPhotoIndex * 100}%)`;
+
+  $("carousel-dots")
+    .querySelectorAll("span")
+    .forEach((d, i) =>
+      d.classList.toggle(
+        "active",
+        i === currentProductPhotoIndex
+      )
+    );
 }
-// swipe tactile
+
 let touchStartX = null;
-$("detail-photo-track").addEventListener("touchstart", (e) => { touchStartX = e.touches[0].clientX; });
+
+$("detail-photo-track").addEventListener("touchstart", (e) => {
+  touchStartX = e.touches[0].clientX;
+});
+
 $("detail-photo-track").addEventListener("touchend", (e) => {
   if (touchStartX === null) return;
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  const total = $("detail-photo-track").children.length;
+
+  const dx =
+    e.changedTouches[0].clientX - touchStartX;
+
+  const total =
+    $("detail-photo-track").children.length;
+
   if (total > 1) {
-    if (dx < -40) { currentProductPhotoIndex = (currentProductPhotoIndex + 1) % total; updateCarouselPosition(); }
-    else if (dx > 40) { currentProductPhotoIndex = (currentProductPhotoIndex - 1 + total) % total; updateCarouselPosition(); }
+    if (dx < -40) {
+      currentProductPhotoIndex =
+        (currentProductPhotoIndex + 1) % total;
+      updateCarouselPosition();
+    } else if (dx > 40) {
+      currentProductPhotoIndex =
+        (currentProductPhotoIndex - 1 + total) % total;
+      updateCarouselPosition();
+    }
   }
+
   touchStartX = null;
 });
 
 function whatsappLink(number, text) {
-  const digits = (number || "").replace(/[^\d+]/g, "").replace(/^00/, "+");
+  const digits = (number || "")
+    .replace(/[^\d+]/g, "")
+    .replace(/^00/, "+");
+
   return `https://wa.me/${digits.replace("+", "")}?text=${encodeURIComponent(text)}`;
 }
 
 function renderProductDetail(p) {
   const color = THUMB_COLORS[p.category] || "#2A55FF";
-  const isOwner = currentUser && p.sellerId === currentUser.uid;
-  const photos = p.photos && p.photos.length ? p.photos : (p.photo ? [p.photo] : []);
+  const isOwner =
+    currentUser && p.sellerId === currentUser.uid;
+
+  const photos =
+    p.photos && p.photos.length
+      ? p.photos
+      : (p.photo ? [p.photo] : []);
+
   renderCarousel(photos, color);
+
   $("detail-cat").textContent = p.category;
   $("detail-title").textContent = p.title;
   $("detail-price").textContent = formatPrice(p.price);
   $("detail-condition").textContent = p.condition || "";
-  $("detail-condition").style.display = p.condition ? "inline-block" : "none";
-  $("detail-shipping").textContent = SHIPPING_LABEL[p.shipping] || "";
-  $("detail-shipping").style.display = p.shipping ? "inline-block" : "none";
-  $("detail-country").textContent = p.sellerCountry || "";
-  $("detail-country").style.display = p.sellerCountry ? "inline-block" : "none";
-  $("detail-desc").textContent = p.description || "Pas de description.";
+  $("detail-condition").style.display =
+    p.condition ? "inline-block" : "none";
+
+  $("detail-shipping").textContent =
+    SHIPPING_LABEL[p.shipping] || "";
+
+  $("detail-shipping").style.display =
+    p.shipping ? "inline-block" : "none";
+
+  $("detail-country").textContent =
+    p.sellerCountry || "";
+
+  $("detail-country").style.display =
+    p.sellerCountry ? "inline-block" : "none";
+
+  $("detail-desc").textContent =
+    p.description || "Pas de description.";
+
   const detailStatus = $("detail-status");
   const normalizedStatus = p.status || "available";
-  if (detailStatus) detailStatus.textContent = normalizedStatus === "sold" ? "Vendu" : normalizedStatus === "reserved" ? "Réservé" : "Disponible";
+
+  if (detailStatus)
+    detailStatus.textContent =
+      normalizedStatus === "sold"
+        ? "Vendu"
+        : normalizedStatus === "reserved"
+          ? "Réservé"
+          : "Disponible";
+
   const statusSelect = $("detail-status-select");
-  if (statusSelect) statusSelect.value = normalizedStatus;
+
+  if (statusSelect)
+    statusSelect.value = normalizedStatus;
+
   const favBtn = $("detail-favorite-btn");
-  if (favBtn) { favBtn.style.display = isOwner ? "none" : "flex"; favBtn.textContent = (currentUserProfile?.favorites || []).includes(p.id) ? "♥" : "♡"; favBtn.classList.toggle("active", (currentUserProfile?.favorites || []).includes(p.id)); }
-  $("detail-owner-badge").style.display = isOwner ? "inline-block" : "none";
-  $("detail-seller-avatar").innerHTML = p.sellerPhoto
-    ? `<img src="${p.sellerPhoto}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`
-    : initials(p.sellerName);
-  $("detail-seller-name").textContent = p.sellerName + (p.sellerIsPro ? " · Pro" : "");
+
+  if (favBtn) {
+    favBtn.style.display =
+      isOwner ? "none" : "flex";
+
+    favBtn.textContent =
+      (currentUserProfile?.favorites || []).includes(p.id)
+        ? "♥"
+        : "♡";
+
+    favBtn.classList.toggle(
+      "active",
+      (currentUserProfile?.favorites || []).includes(p.id)
+    );
+  }
+
+  $("detail-owner-badge").style.display =
+    isOwner ? "inline-block" : "none";
+
+  $("detail-seller-avatar").innerHTML =
+    p.sellerPhoto
+      ? `<img src="${p.sellerPhoto}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`
+      : initials(p.sellerName);
+
+  $("detail-seller-name").textContent =
+    p.sellerName + (p.sellerIsPro ? " · Pro" : "");
+
   $("detail-seller-sub").innerHTML = "Vendeur";
+
   listenSellerPresence(p.sellerId);
-  $("detail-buy-actions").style.display = isOwner ? "none" : "flex";
-  $("offer-form-wrap").style.display = isOwner ? "none" : "block";
-  $("review-form-wrap").style.display = isOwner ? "none" : "block";
+
+  $("detail-buy-actions").style.display =
+    isOwner ? "none" : "flex";
+
+  $("offer-form-wrap").style.display =
+    isOwner ? "none" : "block";
+    $("review-form-wrap").style.display = isOwner ? "none" : "block";
   $("offer-amount").value = "";
   reviewStarValue = 0;
   renderStarInput();
@@ -830,7 +1256,10 @@ $("checkout-form").addEventListener("submit", async (e) => {
       buyerEmail: email,
       buyerWhatsapp: whatsapp
     });
-    const orderText = `Nouvelle demande d'achat au prix affiché (${formatPrice(p.price)})\nNom : ${firstName} ${lastName}\nEmail : ${email}\nWhatsApp : ${whatsapp}`;
+    const orderText = `Nouvelle demande d'achat au prix affiché (${formatPrice(p.price)})
+Nom : ${firstName} ${lastName}
+Email : ${email}
+WhatsApp : ${whatsapp}`;
     await addDoc(collection(db, "chats", chatId, "messages"), {
       senderId: currentUser.uid, senderName: currentUser.displayName || currentUser.email,
       text: orderText, type: "order", createdAt: serverTimestamp()
@@ -951,8 +1380,6 @@ async function compressChatImage(file) {
         const ctx = canvas.getContext("2d", { alpha: false });
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-        // Firestore a une limite d'environ 1 MiB par document.
-        // On garde donc l'image de chat petite pour rester très largement sous cette limite.
         let quality = 0.62;
         let dataUrl = canvas.toDataURL("image/jpeg", quality);
         while (dataUrl.length > 700000 && quality > 0.30) {
@@ -981,8 +1408,6 @@ async function uploadChatImage(file) {
     const imageData = await compressChatImage(file);
     const otherId = currentUser.uid === currentChatMeta.sellerId ? currentChatMeta.buyerId : currentChatMeta.sellerId;
 
-    // Pas de Firebase Storage : la petite image compressée est enregistrée directement
-    // dans le message Firestore. Cela permet l'envoi de photos sans Cloud Storage.
     await addDoc(collection(db, "chats", currentChatId, "messages"), {
       senderId: currentUser.uid,
       senderName: currentUser.displayName || currentUser.email,
@@ -1108,7 +1533,6 @@ function listenThreads() {
   unsubNotif = onSnapshot(q, (snap) => {
     const threads = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    // Notification navigateur pour tout nouveau message reçu (hors 1ère synchro au chargement).
     if (!notifThreadsFirstLoad) {
       snap.docChanges().forEach(change => {
         if (change.type === "added" || change.type === "modified") {
@@ -1282,18 +1706,9 @@ function openAdminGate() {
   const code = prompt("Code administrateur BOULKA");
   if (code !== ADMIN_CODE) { if (code !== null) showToast("Code administrateur incorrect"); return; }
 
-  // IMPORTANT : le code ci-dessus n'est qu'un verrou d'écran côté client.
-  // Les vraies permissions (lire tous les utilisateurs/annonces/conversations,
-  // bannir, supprimer...) sont contrôlées par firestore.rules, qui exigent que
-  // le document users/{uid} du compte connecté ait le champ isAdmin = true.
-  // Un utilisateur ne peut PAS se donner ce droit lui-même depuis l'app (c'est
-  // volontaire, pour la sécurité) : il faut l'activer manuellement dans la
-  // console Firebase.
   if (!currentUserProfile?.isAdmin) {
     alert(
-      "Le code est correct: mais force a toi tu crois quoi la vie c ps rose :\n" 
-       
-     
+      "Le code est correct: mais force a toi tu crois quoi la vie c ps rose :\n"
     );
     return;
   }
@@ -1305,10 +1720,6 @@ function openAdminGate() {
   loadAdminData();
 }
 
-// Charge chaque collection séparément avec Promise.allSettled : si une seule
-// collection est refusée par les règles Firestore, les 3 autres s'affichent
-// quand même, et on voit précisément laquelle pose problème (au lieu qu'un
-// seul refus fasse échouer tout le panneau, comme avec Promise.all).
 async function loadOneAdminCollection(name) {
   try {
     const snap = await getDocs(collection(db, name));
@@ -1371,7 +1782,6 @@ async function loadAdminData() {
     showToast("Certaines données admin sont refusées par Firestore — regarde les messages ⚠ dans le panneau");
   }
 }
-
 
 async function adminToggleBan(uid) {
   const snap = await getDoc(doc(db, "users", uid)); if (!snap.exists()) return;
