@@ -353,7 +353,7 @@ a { color: inherit; text-decoration:none; }
 
 /* ---------- BOULKA PRO UPGRADE ---------- */
 .filter-row select { flex:1; min-width:130px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--surf-2); color:var(--txt); }
-.status-badge { position:absolute; left:10px; bottom:10px; z-index:5; padding:5px 9px; border-radius:8px; font-size:10.5px; font-weight:800; background:rgba(10,24,48,.78); color:#fff; }
+.status-badge { position:absolute; right:10px; bottom:10px; z-index:5; padding:5px 9px; border-radius:8px; font-size:10.5px; font-weight:800; background:rgba(10,24,48,.78); color:#fff; }
 .status-available { background:rgba(22,130,82,.9); } .status-reserved { background:rgba(190,125,25,.94); } .status-sold { background:rgba(100,100,110,.94); }
 .favorite-btn,.favorite-detail { border:1px solid var(--line); background:rgba(255,255,255,.92); color:var(--hero); width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:19px; z-index:8; cursor:pointer; }
 .favorite-btn { position:absolute; right:10px; top:10px; } .favorite-btn.active,.favorite-detail.active { color:#d33a65; }
